@@ -1,0 +1,14 @@
+{
+    "name": "Katuusagi.MemoizationForUnity",
+    "rootNamespace": "Katuusagi.MemoizationForUnity",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

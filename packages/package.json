@@ -1,0 +1,22 @@
+{
+  "name": "com.katuusagi.memoizationforunity",
+  "displayName": "MemoizationForUnity",
+  "description": "Libraries supporting Memoization. Powerful optimization features.",
+  "version": "1.0.0",
+  "unity": "2021.3",
+  "dependencies": {
+    "com.unity.test-framework": "1.1.31",
+    "com.unity.test-framework.performance": "3.0.2"
+  },
+  "keywords": [
+    "memoization",
+    "optimize",
+    "metaprogramming"
+  ],
+  "author": {
+    "name": "Katuusagi a.k.a Katsuya100"
+  },
+  "documentationUrl": "https://github.com/Katsuya100/MemoizationForUnity",
+  "changelogUrl": "https://github.com/Katsuya100/MemoizationForUnity/releases",
+  "licensesUrl": "https://github.com/Katsuya100/MemoizationForUnity/blob/v1.0.0/LICENSE"
+}
