@@ -6,8 +6,9 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Linq;
-using System.Reflection.Metadata;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -26,10 +27,9 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
     {
         private struct RootInfo
         {
-            public string AncestorPath;
-            public string[] Ancestors;
+            public AncestorInfo[] Ancestors;
             public string[] Usings;
-            public string Modifier;
+            public ModifierType Modifier;
             public string NameSpace;
             public string Name;
             public List<MethodInfo> Methods;
@@ -49,7 +49,21 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                         result = $"{NameSpace}.{result}";
                     }
 
-                    return $"{result}.Generated.cs";
+                    return $"{result}.Generated";
+                }
+            }
+
+            public string AncestorPath
+            {
+                get
+                {
+                    var ancestorPath = string.Concat(Ancestors.Select(v => $"{v.Name}-"));
+                    if (!string.IsNullOrEmpty(ancestorPath))
+                    {
+                        ancestorPath = ancestorPath.Remove(ancestorPath.Length - 1);
+                    }
+
+                    return ancestorPath;
                 }
             }
 
@@ -71,11 +85,17 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
             }
         }
 
+        private struct AncestorInfo
+        {
+            public ModifierType Modifier;
+            public string Name;
+        }
+
         private struct MethodInfo
         {
             public string Id;
             public string[] Attributes;
-            public string Modifier;
+            public ModifierType Modifier;
             public string Name;
             public string RawName;
             public string CacheComparer;
@@ -102,24 +122,11 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public string ModifieredReturnType
-            {
-                get
-                {
-                    if (string.IsNullOrEmpty(Modifier))
-                    {
-                        return ReturnType;
-                    }
-
-                    return $"{Modifier} {ReturnType}";
-                }
-            }
-
             public bool IsStatic
             {
                 get
                 {
-                    return Modifier.Contains("static");
+                    return Modifier.HasFlag(ModifierType.Static);
                 }
             }
 
@@ -808,7 +815,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                         });
                         var builder = new CSharpScriptBuilder();
                         builder.BuildAndNewLine(root.Result);
-                        context.AddSource(rootInfo.FileName, SourceText.From(builder.ToString(), Encoding.UTF8));
+                        context.AddSource($"{rootInfo.FileName}.cs", SourceText.From(builder.ToString(), Encoding.UTF8));
                     }
                 }
                 catch (Exception e)
@@ -818,7 +825,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
             }
         }
 
-        private void GenerateAncestor(TypeGenerator typeGenerator, RootInfo rootInfo, IEnumerable<string> ancestors)
+        private void GenerateAncestor(TypeGenerator typeGenerator, RootInfo rootInfo, IEnumerable<AncestorInfo> ancestors)
         {
             if (!ancestors.Any())
             {
@@ -827,7 +834,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
             }
 
             var ancestor = ancestors.First();
-            typeGenerator.Generate(ModifierType.None, ancestor, tg =>
+            typeGenerator.Generate(ancestor.Modifier, ancestor.Name, tg =>
             {
                 GenerateAncestor(tg.Type, rootInfo, ancestors.Skip(1));
             });
@@ -838,7 +845,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
             var guid = Guid.NewGuid().ToString().Replace("-", string.Empty);
             var cacheValues = $"__MemoizationCacheValues_{guid}__";
             var concurrentCacheValues = $"__MemoizationThreadSafeCacheValues_{guid}__";
-            typeGenerator.Generate(ModifierType.None, $"{rootInfo.Modifier} {rootInfo.Name}", tg =>
+            typeGenerator.Generate(rootInfo.Modifier, rootInfo.Name, tg =>
             {
                 if (rootInfo.HasGenericClearableStaticTypeCache)
                 {
@@ -955,7 +962,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
             var result = method.Result;
             var cacheValue = method.CacheValueName;
 
-            methodGenerator.Generate(ModifierType.None, method.ModifieredReturnType, method.Name, mg =>
+            methodGenerator.Generate(method.Modifier, method.ReturnType, method.Name, mg =>
             {
                 foreach (var attribute in method.Attributes)
                 {
@@ -1082,60 +1089,57 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
         private List<RootInfo> CreateMemoizationRootInfos(GeneratorExecutionContext context)
         {
             var result = new List<RootInfo>();
-            foreach (var syntaxTree in context.Compilation.SyntaxTrees)
+            var typeGroups = context.Compilation.SyntaxTrees
+                                    .SelectMany(v => v.GetCompilationUnitRoot().GetStructuredTypes())
+                                    .GroupBy(v => v.GetFullName());
+            foreach (var typeGroup in typeGroups)
             {
-                var root = syntaxTree.GetCompilationUnitRoot();
-                foreach (var type in root.GetStructuredTypes())
+                ModifierType typeModifier = ModifierType.None;
+                foreach (var type in typeGroup)
                 {
-                    var ancestors = type.GetAncestors<TypeDeclarationSyntax>().Reverse();
-                    var ancestorPath = string.Concat(ancestors.Select(v => $"{v.Identifier}-"));
-                    if (!string.IsNullOrEmpty(ancestorPath))
+                    typeModifier |= ScriptGeneratorUtils.GetModifierType(type.Keyword.Text);
+                    typeModifier |= ScriptGeneratorUtils.GetModifierType(type.Modifiers.ToString());
+                }
+
+                var firstType = typeGroup.First();
+
+                var ancestors = firstType.GetAncestors<TypeDeclarationSyntax>().Reverse().Select(v =>
+                {
+                    return new AncestorInfo()
                     {
-                        ancestorPath = ancestorPath.Remove(ancestorPath.Length - 1);
-                    }
-                    var ancestorNames = ancestors.Select(v =>
-                    {
-                        var ancestorName = $"{v.Keyword} {v.Identifier}";
-                        if (!string.IsNullOrEmpty(v.Modifiers.ToString()))
-                        {
-                            ancestorName = $"{v.Modifiers} {ancestorName}";
-                        }
-
-                        return ancestorName;
-                    }).ToArray();
-
-                    var typeModifier = type.Keyword.ToString();
-                    if (!string.IsNullOrEmpty(type.Modifiers.ToString()))
-                    {
-                        typeModifier = $"{type.Modifiers} {typeModifier}";
-                    }
-
-                    var usings = type.GetAncestorUsings();
-                    var rootInfo = new RootInfo()
-                    {
-                        AncestorPath = ancestorPath,
-                        Modifier = typeModifier,
-                        Ancestors = ancestorNames,
-                        NameSpace = type.GetNameSpace(),
-                        Name = type.Identifier.ToString(),
-                        Usings = usings.Select(v =>
-                        {
-                            var usingName = v.Name.ToString();
-                            if (!string.IsNullOrEmpty(v.StaticKeyword.Text))
-                            {
-                                usingName = $"{v.StaticKeyword.Text} {usingName}";
-                            }
-
-                            if (!string.IsNullOrEmpty(v.Alias?.Name?.ToString()))
-                            {
-                                usingName = $"{v.Alias.Name} = {usingName}";
-                            }
-
-                            return usingName;
-                        }).ToArray(),
-                        Methods = new List<MethodInfo>()
+                        Modifier = ScriptGeneratorUtils.GetModifierType(v.Keyword.Text) | ScriptGeneratorUtils.GetModifierType(v.Modifiers.ToString()),
+                        Name = v.Identifier.ToString(),
                     };
+                }).ToArray();
 
+                var usings = firstType.GetAncestorUsings().Select(v =>
+                {
+                    var usingName = v.Name.ToString();
+                    if (!string.IsNullOrEmpty(v.StaticKeyword.Text))
+                    {
+                        usingName = $"{v.StaticKeyword.Text} {usingName}";
+                    }
+
+                    if (!string.IsNullOrEmpty(v.Alias?.Name?.ToString()))
+                    {
+                        usingName = $"{v.Alias.Name} = {usingName}";
+                    }
+
+                    return usingName;
+                }).ToArray();
+
+                var rootInfo = new RootInfo()
+                {
+                    Modifier = typeModifier,
+                    Ancestors = ancestors,
+                    NameSpace = firstType.GetNameSpace(),
+                    Name = firstType.Identifier.ToString(),
+                    Usings = usings,
+                    Methods = new List<MethodInfo>()
+                };
+
+                foreach (var type in typeGroup)
+                {
                     var memoizeNames = type.GetTypeNames("Katuusagi.MemoizationForUnity", "Memoization").ToArray();
                     var methods = type.GetMethods();
                     foreach (var method in methods)
@@ -1154,16 +1158,22 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                         }
 
                         var methodName = method.Identifier.ToString();
-
-                        var modifier = memoize.GetArgument("Modifier")?.Expression?.ToString()?.Replace("\"", string.Empty);
-                        if (string.IsNullOrEmpty(modifier))
+                        ModifierType methodModifier;
+                        var modifierLabel= memoize.GetArgument("Modifier")?.Expression?.ToString()?.Replace("\"", string.Empty);
+                        if (string.IsNullOrEmpty(modifierLabel))
                         {
-                            modifier = string.Concat(method.Modifiers.Where(v => v.Text != "async").Select(v => $"{v.Text} "));
-                            modifier = modifier.Remove(modifier.Length - 1, 1);
+                            methodModifier = ScriptGeneratorUtils.GetModifierType(method.Modifiers.ToString());
+                        }
+                        else
+                        {
+                            methodModifier = ScriptGeneratorUtils.GetModifierType(modifierLabel);
                         }
 
-                        bool isStruct = typeModifier.Contains("struct");
-                        bool isStatic = modifier.Contains("static");
+                        // asyncはTaskだけ返す
+                        methodModifier &= ~ModifierType.Async;
+
+                        bool isStruct = typeModifier.HasFlag(ModifierType.Struct);
+                        bool isStatic = methodModifier.HasFlag(ModifierType.Static);
                         if (isStruct && !isStatic)
                         {
                             context.Error("MEMOIZATION002", "Memoization failed.", "Memoization is static member or class instance member only.", method.GetLocation());
@@ -1201,7 +1211,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                             Name = memoizationMethodName,
                             RawName = methodName,
                             ReturnType = method.ReturnType.ToString(),
-                            Modifier = modifier,
+                            Modifier = methodModifier,
                             CacheComparer = cacheComparer,
                             IsClearable = isClearable,
                             IsThreadSafe = isThreadSafe,
@@ -1251,17 +1261,17 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
 
                         if (methodInfo.CacheKeyCount > 8)
                         {
-                            context.Error("Memoization004", "Memoization failed.", "Memoization does not allow more than 8 inputs.");
+                            context.Error("MEMOIZATION004", "Memoization failed.", "Memoization does not allow more than 8 inputs.");
                             continue;
                         }
 
                         rootInfo.Methods.Add(methodInfo);
                     }
+                }
 
-                    if (rootInfo.Methods.Any())
-                    {
-                        result.Add(rootInfo);
-                    }
+                if (rootInfo.Methods.Any())
+                {
+                    result.Add(rootInfo);
                 }
             }
 

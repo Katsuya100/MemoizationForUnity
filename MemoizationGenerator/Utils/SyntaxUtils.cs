@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
 using System.Linq;
+using System.Xml.Linq;
 
 namespace Katuusagi.MemoizationForUnity.SourceGenerator.Utils
 {
@@ -114,6 +115,36 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator.Utils
             {
                 result = result.Remove(result.Length - 1, 1);
             }
+            return result;
+        }
+
+        public static string GetAncestorPath(this TypeDeclarationSyntax self)
+        {
+            var ancestors = self.GetAncestors<TypeDeclarationSyntax>().Reverse();
+            var ancestorPath = string.Concat(ancestors.Select(v => $"{v.Identifier}-"));
+            if (!string.IsNullOrEmpty(ancestorPath))
+            {
+                ancestorPath = ancestorPath.Remove(ancestorPath.Length - 1);
+            }
+
+            return ancestorPath;
+        }
+
+        public static string GetFullName(this TypeDeclarationSyntax self)
+        {
+            string result = self.Identifier.ToString();
+            var ancestorPath = GetAncestorPath(self);
+            if (!string.IsNullOrEmpty(ancestorPath))
+            {
+                result = $"{ancestorPath}-{result}";
+            }
+
+            var nameSpace = GetNameSpace(self);
+            if (!string.IsNullOrEmpty(nameSpace))
+            {
+                result = $"{nameSpace}.{result}";
+            }
+
             return result;
         }
 

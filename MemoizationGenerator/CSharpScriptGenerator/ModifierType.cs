@@ -24,5 +24,6 @@ namespace Katuusagi.CSharpScriptGenerator
         ReadOnly    = 1 << 15,
         Ref         = 1 << 16,
         Unsafe      = 1 << 17,
+        Async       = 1 << 18,
     }
 }

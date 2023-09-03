@@ -1,7 +1,84 @@
+using System;
+
 namespace Katuusagi.CSharpScriptGenerator
 {
     public static class ScriptGeneratorUtils
     {
+        public static ModifierType GetModifierType(string label)
+        {
+            var result = ModifierType.None;
+            if (label == null)
+            {
+                return result;
+            }
+
+            var splitedLabels = label.Split(new char[] { ' ', '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var splitedLabel in splitedLabels)
+            {
+                switch (splitedLabel)
+                {
+                    case "public":
+                        result |= ModifierType.Public;
+                        break;
+                    case "protected":
+                        result |= ModifierType.Protected;
+                        break;
+                    case "private":
+                        result |= ModifierType.Private;
+                        break;
+                    case "internal":
+                        result |= ModifierType.Internal;
+                        break;
+                    case "unsafe":
+                        result |= ModifierType.Unsafe;
+                        break;
+                    case "sealed":
+                        result |= ModifierType.Sealed;
+                        break;
+                    case "static":
+                        result |= ModifierType.Static;
+                        break;
+                    case "partial":
+                        result |= ModifierType.Partial;
+                        break;
+                    case "readonly":
+                        result |= ModifierType.ReadOnly;
+                        break;
+                    case "ref":
+                        result |= ModifierType.Ref;
+                        break;
+                    case "const":
+                        result |= ModifierType.Const;
+                        break;
+                    case "abstract":
+                        result |= ModifierType.Abstract;
+                        break;
+                    case "virtual":
+                        result |= ModifierType.Virtual;
+                        break;
+                    case "override":
+                        result |= ModifierType.Override;
+                        break;
+                    case "async":
+                        result |= ModifierType.Async;
+                        break;
+                    case "record":
+                        result |= ModifierType.Record;
+                        break;
+                    case "class":
+                        result |= ModifierType.Class;
+                        break;
+                    case "struct":
+                        result |= ModifierType.Struct;
+                        break;
+                    case "interface":
+                        result |= ModifierType.Interface;
+                        break;
+                }
+            }
+            return result;
+        }
+
         public static string GetModifierLabel(this ModifierType modifier)
         {
             string result = string.Empty;
@@ -9,13 +86,21 @@ namespace Katuusagi.CSharpScriptGenerator
             {
                 result += "public ";
             }
-            else if (modifier.HasFlag(ModifierType.Protected))
-            {
-                result += "protected ";
-            }
             else if (modifier.HasFlag(ModifierType.Private))
             {
                 result += "private ";
+                if (modifier.HasFlag(ModifierType.Protected))
+                {
+                    result += "protected ";
+                }
+            }
+            else if (modifier.HasFlag(ModifierType.Protected))
+            {
+                result += "protected ";
+                if (modifier.HasFlag(ModifierType.Internal))
+                {
+                    result += "internal ";
+                }
             }
             else if (modifier.HasFlag(ModifierType.Internal))
             {
@@ -68,6 +153,11 @@ namespace Katuusagi.CSharpScriptGenerator
             else if (modifier.HasFlag(ModifierType.Override))
             {
                 result += "override ";
+            }
+
+            if (modifier.HasFlag(ModifierType.Async))
+            {
+                result += "async ";
             }
 
             if (modifier.HasFlag(ModifierType.Record))
