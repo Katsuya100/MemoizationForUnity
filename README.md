@@ -268,10 +268,6 @@ Therefore, application of Memoization to struct instance methods is prohibited.
 ### Memoization to methods without return value or out,ref
 Memoization cannot be set for methods that have no outputs.  
 
-### If more than 8 inputs
-Inputs are all parameters except the out parameter.  
-In the case of instance methods, generic parameters are also included as inputs.  
-
 ## Reasons for high performance
 This library uses SourceGenerator to analyze the code and select the optimal cache method on a case-by-case basis.  
 For example, if a method has arguments, it is converted to a Tuple and an EqualityComparer optimized specifically for Tuple is used.  

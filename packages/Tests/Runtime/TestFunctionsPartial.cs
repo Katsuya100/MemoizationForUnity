@@ -138,6 +138,18 @@ namespace Katuusagi.MemoizationForUnity.Tests
             return table[key];
         }
 
+        [Memoization]
+        public static int StaticManyParameterRaw(int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, int a9)
+        {
+            return default;
+        }
+
+        [Memoization]
+        public static int StaticManyGenericParameterRaw<T1, T2, T3, T4, T5, T6, T7, T8, T9>(T1 a1, T2 a2, T3 a3, T4 a4, T5 a5, T6 a6, T7 a7, T8 a8, T9 a9)
+        {
+            return default;
+        }
+
         private int _instanceCounter = 0;
 
         [Memoization]
@@ -270,6 +282,18 @@ namespace Katuusagi.MemoizationForUnity.Tests
         public TValue InstanceClearableGetTableRaw<TKey, TValue>(Dictionary<TKey, TValue> table, TKey key)
         {
             return table[key];
+        }
+
+        [Memoization]
+        public int InstanceManyParameterRaw(int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, int a9)
+        {
+            return default;
+        }
+
+        [Memoization]
+        public int InstanceManyGenericParameterRaw<T1, T2, T3, T4, T5, T6, T7, T8, T9>(T1 a1, T2 a2, T3 a3, T4 a4, T5 a5, T6 a6, T7 a7, T8 a8, T9 a9)
+        {
+            return default;
         }
     }
 }

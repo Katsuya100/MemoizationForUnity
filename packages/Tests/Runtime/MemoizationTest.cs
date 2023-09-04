@@ -164,6 +164,12 @@ namespace Katuusagi.MemoizationForUnity.Tests
             dic[10] = 100;
             var r = TestFunctions.StaticGetTable(dic, 10);
             Assert.AreEqual(l, r);
+
+            var dic2 = new Dictionary<int, long>() { { 10, 10 } };
+            var l2 = TestFunctions.StaticGetTable(dic2, 10);
+            dic[10] = 100;
+            var r2 = TestFunctions.StaticGetTable(dic2, 10);
+            Assert.AreEqual(l2, r2);
         }
 
         [Test]
@@ -178,6 +184,13 @@ namespace Katuusagi.MemoizationForUnity.Tests
             TestFunctions.ClearStaticMemoizationCache();
             r = TestFunctions.StaticClearableGetTable(dic, 10);
             Assert.AreNotEqual(l, r);
+        }
+
+        [Test]
+        public void StaticManyParameter()
+        {
+            TestFunctions.StaticManyParameter(default, default, default, default, default, default, default, default, default);
+            TestFunctions.StaticManyGenericParameter(default(float), default(float), default(float), default(float), default(float), default(float), default(float), default(float), default(float));
         }
 
         [Test]
@@ -345,6 +358,12 @@ namespace Katuusagi.MemoizationForUnity.Tests
             dic[10] = 100;
             var r = funcs.InstanceGetTable(dic, 10);
             Assert.AreEqual(l, r);
+
+            var dic2 = new Dictionary<int, long>() { { 10, 10 } };
+            var l2 = funcs.InstanceGetTable(dic2, 10);
+            dic[10] = 100;
+            var r2 = funcs.InstanceGetTable(dic2, 10);
+            Assert.AreEqual(l2, r2);
         }
 
         [Test]
@@ -359,6 +378,14 @@ namespace Katuusagi.MemoizationForUnity.Tests
             funcs.ClearInstanceMemoizationCache();
             r = funcs.InstanceClearableGetTable(dic, 10);
             Assert.AreNotEqual(l, r);
+        }
+
+        [Test]
+        public void InstanceManyParameter()
+        {
+            var funcs = new TestFunctions();
+            funcs.InstanceManyParameter(default, default, default, default, default, default, default, default, default);
+            funcs.InstanceManyGenericParameter(default(float), default(float), default(float), default(float), default(float), default(float), default(float), default(float), default(float));
         }
 
         [Test]

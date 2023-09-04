@@ -6,9 +6,8 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -26,6 +25,13 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
     public class MemoizationGenerator : ISourceGenerator
     {
         private struct RootInfo
+        {
+            public List<TypeInfo> TypeInfos;
+            public HashSet<int> AdditionalDefaultComparers;
+            public HashSet<int> AdditionalParamsComparers;
+        }
+
+        private struct TypeInfo
         {
             public AncestorInfo[] Ancestors;
             public string[] Usings;
@@ -49,7 +55,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                         result = $"{NameSpace}.{result}";
                     }
 
-                    return $"{result}.Generated";
+                    return $"{result}.Memoization.Generated";
                 }
             }
 
@@ -105,6 +111,21 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
             public bool HasGenericTypeInReturn;
             public List<GenericParameterInfo> GenericParameters;
             public List<ParameterInfo> Parameters;
+            private static readonly HashSet<string> SimpleKeys = new HashSet<string>()
+            {
+                "bool",
+                "sbyte",
+                "byte",
+                "short",
+                "ushort",
+                "int",
+                "uint",
+                "long",
+                "ulong",
+                "float",
+                "double",
+                "char",
+            };
 
             public IEnumerable<ParameterInfo> OutputParameters
             {
@@ -150,7 +171,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
             {
                 get
                 {
-                    return !IsStatic && (HasGenericParameter && (HasGenericTypeInReturn || HasGenericTypeInParameters));
+                    return !IsStatic && HasGenericParameter && (HasGenericTypeInReturn || HasGenericTypeInParameters);
                 }
             }
 
@@ -215,17 +236,33 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
+            public bool IsUseTypeIdKey
+            {
+                get
+                {
+                    return !IsUseStaticTypeCache && !IsUseBaseTypeCache && HasGenericParameter;
+                }
+            }
+
+            public bool IsSimpleKey
+            {
+                get
+                {
+                    return SimpleKeys.Contains(KeyType);
+                }
+            }
+
             public int CacheKeyCount
             {
                 get
                 {
                     int parameterCount = InputParameters.Count();
-                    if (IsUseStaticTypeCache)
+                    if (IsUseTypeIdKey)
                     {
-                        return parameterCount;
+                        return parameterCount + 1;
                     }
 
-                    return parameterCount + GenericParameters.Count;
+                    return parameterCount;
                 }
             }
 
@@ -374,7 +411,12 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 {
                     if (IsUseBaseTypeCache)
                     {
-                        return $"System.Collections.IDictionary";
+                        if (IsThreadSafe)
+                        {
+                            return $"System.Collections.Concurrent.ConcurrentDictionary<{GenericKeyType}, System.Collections.IDictionary>";
+                        }
+
+                        return $"System.Collections.Generic.Dictionary<{GenericKeyType}, System.Collections.IDictionary>";
                     }
 
                     return CacheValueTypeName;
@@ -401,7 +443,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 {
                     if (IsUseBaseTypeCache)
                     {
-                        return null;
+                        return $"new {CacheValueTypeDeclarationName}()";
                     }
 
                     return FieldValue;
@@ -446,17 +488,27 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
+            public string DeclarationKey
+            {
+                get
+                {
+                    if (!IsUseBaseTypeCache)
+                    {
+                        return string.Empty;
+                    }
+
+                    return $"{CalcTypeId(0)}.Id";
+                }
+            }
+
             public string Key
             {
                 get
                 {
                     string result = string.Empty;
-                    if (!IsUseStaticTypeCache)
+                    if (IsUseTypeIdKey)
                     {
-                        foreach (var parameter in GenericParameters)
-                        {
-                            result = $"{result}Katuusagi.MemoizationForUnity.Utils.MemoizationUtils.TypeId<{parameter.Type}>.Id, ";
-                        }
+                        result = $"{result}{CalcTypeId(0)}.Id, ";
                     }
 
                     foreach (var parameter in InputParameters)
@@ -469,10 +521,60 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                         result = result.Remove(result.Length - 2);
                     }
 
-                    if (result.Contains(','))
+                    switch (CachingStyle)
                     {
-                        return $"({result})";
+                        case CachingStyle.SingleKey:
+                            if (IsSimpleKey)
+                            {
+                                return result;
+                            }
+                            return $"System.ValueTuple.Create({result})";
+                        case CachingStyle.MultipleKey:
+                            return $"({result})";
                     }
+
+                    return result;
+                }
+            }
+
+            private string CalcTypeId(int start)
+            {
+                string genericArg = string.Empty;
+                int i;
+                for (i = start; i < 7 + start && i < GenericParameters.Count; ++i)
+                {
+                    genericArg += $"{GenericParameters[i].Type}, ";
+                }
+
+                if (i < GenericParameters.Count)
+                {
+                    genericArg += $"{CalcTypeId(i)}, ";
+                }
+
+
+                if (!string.IsNullOrEmpty(genericArg))
+                {
+                    genericArg = genericArg.Remove(genericArg.Length - 2);
+                }
+
+                return $"Katuusagi.MemoizationForUnity.Utils.MemoizationUtils.TypeId<{genericArg}>";
+            }
+
+            public string GenericKeyType
+            {
+                get
+                {
+                    if (!IsUseBaseTypeCache)
+                    {
+                        return string.Empty;
+                    }
+
+                    var result = "int";
+                    if (SimpleKeys.Contains(result))
+                    {
+                        return result;
+                    }
+
                     return $"System.ValueTuple.Create({result})";
                 }
             }
@@ -485,12 +587,9 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                     switch (CachingStyle)
                     {
                         case CachingStyle.SingleKey:
-                            if (!IsUseStaticTypeCache)
+                            if (IsUseTypeIdKey)
                             {
-                                foreach (var parameter in GenericParameters)
-                                {
-                                    result = $"{result}int, ";
-                                }
+                                result = $"{result}int, ";
                             }
 
                             foreach (var parameter in InputParameters)
@@ -502,14 +601,16 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                             {
                                 result = result.Remove(result.Length - 2);
                             }
+
+                            if (SimpleKeys.Contains(result))
+                            {
+                                return result;
+                            }
                             return $"System.ValueTuple<{result}>";
                         case CachingStyle.MultipleKey:
-                            if (!IsUseStaticTypeCache)
+                            if (IsUseTypeIdKey)
                             {
-                                foreach (var parameter in GenericParameters)
-                                {
-                                    result = $"{result}int {parameter.Type}, ";
-                                }
+                                result = $"{result}int __GenericKey__, ";
                             }
 
                             foreach (var parameter in InputParameters)
@@ -549,7 +650,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                         result = result.Remove(result.Length - 2);
                     }
 
-                    if (result.Contains(','))
+                    if (ResultCount > 1)
                     {
                         return $"({result})";
                     }
@@ -606,12 +707,9 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 get
                 {
                     string result = string.Empty;
-                    if (!IsUseStaticTypeCache)
+                    if (IsUseTypeIdKey)
                     {
-                        foreach (var parameter in GenericParameters)
-                        {
-                            result = $"{result}int, ";
-                        }
+                        result = $"{result}int, ";
                     }
 
                     foreach (var parameter in InputParameters)
@@ -696,23 +794,36 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
             {
                 get
                 {
-                    if (CacheComparer == null)
+                    if (CacheComparer != null)
                     {
-                        var args = KeyTypeArgs;
-                        if (Parameters.LastOrDefault().Modifier?.Contains("params") ?? false)
-                        {
-                            return $"Katuusagi.MemoizationForUnity.ParamsEqualityComparer<{args.Remove(args.Length - 2, 2)}>.Default";
-                        }
-
-                        if (CachingStyle == CachingStyle.SingleKey)
-                        {
-                            return string.Empty;
-                        }
-
-                        return $"Katuusagi.MemoizationForUnity.MemoizationEqualityComparer<{args}>.Default";
+                        return CacheComparer;
                     }
 
-                    return CacheComparer;
+                    var args = KeyTypeArgs;
+                    if (HasParams)
+                    {
+                        return $"Katuusagi.MemoizationForUnity.ParamsEqualityComparer<{args.Remove(args.Length - 2, 2)}>.Default";
+                    }
+
+                    if (IsSimpleKey)
+                    {
+                        return string.Empty;
+                    }
+
+                    if (CachingStyle == CachingStyle.SingleKey)
+                    {
+                        return string.Empty;
+                    }
+
+                    return $"Katuusagi.MemoizationForUnity.MemoizationEqualityComparer<{args}>.Default";
+                }
+            }
+
+            public bool HasParams
+            {
+                get
+                {
+                    return Parameters.LastOrDefault().Modifier?.Contains("params") ?? false;
                 }
             }
         }
@@ -791,32 +902,153 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
             {
                 try
                 {
-                    var rootInfos = CreateMemoizationRootInfos(context);
-                    foreach (var rootInfo in rootInfos)
+                    var rootInfo = CreateMemoizationRootInfo(context);
+                    foreach (var typeInfo in rootInfo.TypeInfos)
                     {
                         var root = new RootGenerator();
                         root.Generate(rg =>
                         {
-                            foreach (var @using in rootInfo.Usings)
+                            foreach (var @using in typeInfo.Usings)
                             {
                                 rg.Using.Generate(@using);
                             }
 
-                            if (string.IsNullOrEmpty(rootInfo.NameSpace))
+                            if (string.IsNullOrEmpty(typeInfo.NameSpace))
                             {
-                                GenerateAncestor(rg.Type, rootInfo, rootInfo.Ancestors);
+                                GenerateAncestor(rg.Type, typeInfo, typeInfo.Ancestors);
                                 return;
                             }
 
-                            rg.Namespace.Generate(rootInfo.NameSpace, ng =>
+                            rg.Namespace.Generate(typeInfo.NameSpace, ng =>
                             {
-                                GenerateAncestor(ng.Type, rootInfo, rootInfo.Ancestors);
+                                GenerateAncestor(ng.Type, typeInfo, typeInfo.Ancestors);
                             });
                         });
                         var builder = new CSharpScriptBuilder();
                         builder.BuildAndNewLine(root.Result);
-                        context.AddSource($"{rootInfo.FileName}.cs", SourceText.From(builder.ToString(), Encoding.UTF8));
+                        context.AddSource($"{typeInfo.FileName}.cs", SourceText.From(builder.ToString(), Encoding.UTF8));
                     }
+
+                    if (!rootInfo.AdditionalDefaultComparers.Any() &&
+                        !rootInfo.AdditionalParamsComparers.Any())
+                    {
+                        return;
+                    }
+
+                    var comparerRoot = new RootGenerator();
+                    comparerRoot.Generate(rg =>
+                    {
+                        rg.Using.Generate("System");
+                        rg.Using.Generate("System.Collections.Generic");
+                        rg.Using.Generate("System.Linq");
+
+                        rg.Namespace.Generate("Katuusagi.MemoizationForUnity", ng =>
+                        {
+                            foreach (var count in rootInfo.AdditionalDefaultComparers)
+                            {
+                                string gen = string.Empty;
+                                for (int i = 1; i <= count; ++i)
+                                {
+                                    gen += $"T{i}, ";
+                                }
+
+                                if (!string.IsNullOrEmpty(gen))
+                                {
+                                    gen = gen.Remove(gen.Length - 2, 2);
+                                }
+
+                                ng.Type.Generate(ModifierType.Internal | ModifierType.Sealed | ModifierType.Class, "MemoizationEqualityComparer", tg =>
+                                {
+                                    for (int i = 1; i <= count; ++i)
+                                    {
+                                        tg.GenericParam.Generate($"T{i}");
+                                    }
+
+                                    tg.BaseType.Generate($"IEqualityComparer<({gen})>");
+                                    tg.Property.Generate(ModifierType.Static | ModifierType.Public, $"MemoizationEqualityComparer<{gen}>", "Default", "new ()");
+                                    tg.Method.Generate(ModifierType.None, "bool", $"IEqualityComparer<({gen})>.Equals", mg =>
+                                    {
+                                        mg.Param.Generate($"({gen})", "x");
+                                        mg.Param.Generate($"({gen})", "y");
+
+                                        mg.Code.Generate($"return x.Equals(y);");
+                                    });
+
+                                    tg.Method.Generate(ModifierType.None, "int", $"IEqualityComparer<({gen})>.GetHashCode", mg =>
+                                    {
+                                        mg.Param.Generate($"({gen})", "obj");
+
+                                        mg.Code.Generate($"var hash = new HashCode();");
+                                        for (int i = 1; i <= count; ++i)
+                                        {
+                                            mg.Code.Generate($"hash.Add(obj.Item{i});");
+                                        }
+
+                                        mg.Code.Generate("return hash.ToHashCode();");
+                                    });
+                                });
+                            }
+
+                            foreach (var count in rootInfo.AdditionalParamsComparers)
+                            {
+                                string gen = string.Empty;
+                                for (int i = 1; i <= count; ++i)
+                                {
+                                    gen += $"T{i}, ";
+                                }
+
+                                if (!string.IsNullOrEmpty(gen))
+                                {
+                                    gen = gen.Remove(gen.Length - 2, 2);
+                                }
+
+                                ng.Type.Generate(ModifierType.Internal | ModifierType.Sealed | ModifierType.Class, "ParamsEqualityComparer", tg =>
+                                {
+                                    for (int i = 1; i <= count; ++i)
+                                    {
+                                        tg.GenericParam.Generate($"T{i}");
+                                    }
+
+                                    tg.BaseType.Generate($"IEqualityComparer<({gen}[])>");
+                                    tg.Property.Generate(ModifierType.Static | ModifierType.Public, $"ParamsEqualityComparer<{gen}>", "Default", "new ()");
+                                    tg.Method.Generate(ModifierType.None, "bool", $"IEqualityComparer<({gen}[])>.Equals", mg =>
+                                    {
+                                        mg.Param.Generate($"({gen}[])", "x");
+                                        mg.Param.Generate($"({gen}[])", "y");
+
+                                        mg.Code.Generate($"return EqualityComparer<T1>.Default.Equals(x.Item1, y.Item1) &&");
+                                        for (int i = 2; i < count; ++i)
+                                        {
+                                            mg.Code.Generate($"       EqualityComparer<T{i}>.Default.Equals(x.Item{i}, y.Item{i}) &&");
+                                        }
+                                        mg.Code.Generate($"       (x.Item{count} ?? Array.Empty<T{count}>()).SequenceEqual(y.Item{count} ?? Array.Empty<T{count}>());");
+                                    });
+
+                                    tg.Method.Generate(ModifierType.None, "int", $"IEqualityComparer<({gen}[])>.GetHashCode", mg =>
+                                    {
+                                        mg.Param.Generate($"({gen}[])", "obj");
+
+                                        mg.Code.Generate($"var hash = new HashCode();");
+                                        for (int i = 1; i < count; ++i)
+                                        {
+                                            mg.Code.Generate($"hash.Add(obj.Item{i});");
+                                        }
+
+                                        mg.Code.Generate($"foreach (var elem in obj.Item{count} ?? Array.Empty<T{count}>())", () =>
+                                        {
+                                            mg.Code.Generate("hash.Add(elem);");
+                                        });
+
+                                        mg.Code.Generate("return hash.ToHashCode();");
+                                    });
+                                });
+                            }
+                        });
+                    });
+
+                    var comparerBuilder = new CSharpScriptBuilder();
+                    comparerBuilder.BuildAndNewLine(comparerRoot.Result);
+                    context.AddSource($"Katuusagi.MemoizationForUnity.MemoizationEqualityComparer.Generated.cs", SourceText.From(comparerBuilder.ToString(), Encoding.UTF8));
                 }
                 catch (Exception e)
                 {
@@ -825,39 +1057,39 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
             }
         }
 
-        private void GenerateAncestor(TypeGenerator typeGenerator, RootInfo rootInfo, IEnumerable<AncestorInfo> ancestors)
+        private void GenerateAncestor(TypeGenerator typeGenerator, TypeInfo typeInfo, IEnumerable<AncestorInfo> ancestors)
         {
             if (!ancestors.Any())
             {
-                GenerateType(typeGenerator, rootInfo);
+                GenerateType(typeGenerator, typeInfo);
                 return;
             }
 
             var ancestor = ancestors.First();
             typeGenerator.Generate(ancestor.Modifier, ancestor.Name, tg =>
             {
-                GenerateAncestor(tg.Type, rootInfo, ancestors.Skip(1));
+                GenerateAncestor(tg.Type, typeInfo, ancestors.Skip(1));
             });
         }
 
-        private void GenerateType(TypeGenerator typeGenerator, RootInfo rootInfo)
+        private void GenerateType(TypeGenerator typeGenerator, TypeInfo typeInfo)
         {
             var guid = Guid.NewGuid().ToString().Replace("-", string.Empty);
             var cacheValues = $"__MemoizationCacheValues_{guid}__";
             var concurrentCacheValues = $"__MemoizationThreadSafeCacheValues_{guid}__";
-            typeGenerator.Generate(rootInfo.Modifier, rootInfo.Name, tg =>
+            typeGenerator.Generate(typeInfo.Modifier, typeInfo.Name, tg =>
             {
-                if (rootInfo.HasGenericClearableStaticTypeCache)
+                if (typeInfo.HasGenericClearableStaticTypeCache)
                 {
                     tg.Field.Generate(ModifierType.Private | ModifierType.Static, "System.Collections.Generic.Stack<System.Collections.IDictionary>", cacheValues, "new System.Collections.Generic.Stack<System.Collections.IDictionary>()");
                 }
 
-                if (rootInfo.HasThreadSafeGenericClearableStaticTypeCache)
+                if (typeInfo.HasThreadSafeGenericClearableStaticTypeCache)
                 {
                     tg.Field.Generate(ModifierType.Private | ModifierType.Static, "System.Collections.Concurrent.ConcurrentStack<System.Collections.IDictionary>", concurrentCacheValues, "new System.Collections.Concurrent.ConcurrentStack<System.Collections.IDictionary>()");
                 }
 
-                foreach (var method in rootInfo.Methods)
+                foreach (var method in typeInfo.Methods)
                 {
                     var cacheValueTypeDeclarationName = method.CacheValueTypeDeclarationName;
                     var cacheValueType = method.CacheValueTypeName;
@@ -907,7 +1139,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                     GenerateCacheMethod(tg.Method, method);
                 }
 
-                var clearableInstanceMethods = rootInfo.Methods.Where(v => v.IsClearable && !v.IsUseStaticCache).ToArray();
+                var clearableInstanceMethods = typeInfo.Methods.Where(v => v.IsClearable && !v.IsUseStaticCache).ToArray();
                 if (clearableInstanceMethods.Any())
                 {
                     tg.Method.Generate(ModifierType.Public, "void", "ClearInstanceMemoizationCache", mg =>
@@ -916,7 +1148,10 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                         {
                             if (method.IsUseBaseTypeCache)
                             {
-                                mg.Code.Generate($"{method.CacheValueName}?.Clear();");
+                                mg.Code.Generate($"foreach (var value in {method.CacheValueName}.Values)", () =>
+                                {
+                                    mg.Code.Generate($"value.Clear();");
+                                });
                             }
                             else
                             {
@@ -926,12 +1161,12 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                     });
                 }
 
-                var clearableStaticMethods = rootInfo.Methods.Where(v => v.IsClearable && v.IsUseStaticCache && !v.HasGenericParameter).ToArray();
-                if (clearableStaticMethods.Any() || rootInfo.HasGenericClearableStaticTypeCache)
+                var clearableStaticMethods = typeInfo.Methods.Where(v => v.IsClearable && v.IsUseStaticCache && !v.HasGenericParameter).ToArray();
+                if (clearableStaticMethods.Any() || typeInfo.HasGenericClearableStaticTypeCache)
                 {
                     tg.Method.Generate(ModifierType.Public | ModifierType.Static, "void", "ClearStaticMemoizationCache", mg =>
                     {
-                        if (rootInfo.HasGenericClearableStaticTypeCache)
+                        if (typeInfo.HasGenericClearableStaticTypeCache)
                         {
                             mg.Code.Generate($"foreach (var value in {cacheValues})", () =>
                             {
@@ -939,7 +1174,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                             });
                         }
 
-                        if (rootInfo.HasThreadSafeGenericClearableStaticTypeCache)
+                        if (typeInfo.HasThreadSafeGenericClearableStaticTypeCache)
                         {
                             mg.Code.Generate($"foreach (var value in {concurrentCacheValues})", () =>
                             {
@@ -1004,15 +1239,25 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 if (method.IsUseBaseTypeCache)
                 {
                     var cacheValueTypeName = method.CacheValueTypeName;
+                    var comparer = method.Comparer;
+                    var typeKey = method.DeclarationKey;
+                    mg.Code.Generate($"var __typeKey__ = {typeKey};");
                     mg.Code.Generate($"{cacheValueTypeName} __table__;");
-                    mg.Code.Generate($"if ({cacheValue} == null)", () =>
+                    mg.Code.Generate($"if ({cacheValue}.TryGetValue(__typeKey__, out var __tmp__))", () =>
                     {
-                        mg.Code.Generate($"__table__ = {method.FieldValue};");
-                        mg.Code.Generate($"{cacheValue} = __table__;");
+                        mg.Code.Generate($"__table__ = __tmp__ as {cacheValueTypeName};");
                     });
                     mg.Code.Generate($"else", () =>
                     {
-                        mg.Code.Generate($"__table__ = {cacheValue} as {cacheValueTypeName};");
+                        mg.Code.Generate($"__table__ = new {cacheValueTypeName}({comparer});");
+                        if (method.IsThreadSafe)
+                        {
+                            mg.Code.Generate($"{cacheValue}.TryAdd(__typeKey__, __table__);");
+                        }
+                        else
+                        {
+                            mg.Code.Generate($"{cacheValue}.Add(__typeKey__, __table__);");
+                        }
                     });
 
                     cacheValue = "__table__";
@@ -1086,9 +1331,15 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
             });
         }
 
-        private List<RootInfo> CreateMemoizationRootInfos(GeneratorExecutionContext context)
+        private RootInfo CreateMemoizationRootInfo(GeneratorExecutionContext context)
         {
-            var result = new List<RootInfo>();
+            var result = new RootInfo()
+            {
+                TypeInfos = new List<TypeInfo>(),
+                AdditionalDefaultComparers = new HashSet<int>(),
+                AdditionalParamsComparers = new HashSet<int>(),
+            };
+
             var typeGroups = context.Compilation.SyntaxTrees
                                     .SelectMany(v => v.GetCompilationUnitRoot().GetStructuredTypes())
                                     .GroupBy(v => v.GetFullName());
@@ -1128,14 +1379,14 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                     return usingName;
                 }).ToArray();
 
-                var rootInfo = new RootInfo()
+                var typeInfo = new TypeInfo()
                 {
                     Modifier = typeModifier,
                     Ancestors = ancestors,
                     NameSpace = firstType.GetNameSpace(),
                     Name = firstType.Identifier.ToString(),
                     Usings = usings,
-                    Methods = new List<MethodInfo>()
+                    Methods = new List<MethodInfo>(),
                 };
 
                 foreach (var type in typeGroup)
@@ -1259,19 +1510,26 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                             continue;
                         }
 
-                        if (methodInfo.CacheKeyCount > 8)
+                        var keyCount = methodInfo.CacheKeyCount;
+                        if (keyCount > 8 && methodInfo.CacheComparer == null)
                         {
-                            context.Error("MEMOIZATION004", "Memoization failed.", "Memoization does not allow more than 8 inputs.");
-                            continue;
+                            if (methodInfo.HasParams)
+                            {
+                                result.AdditionalParamsComparers.Add(keyCount);
+                            }
+                            else
+                            {
+                                result.AdditionalDefaultComparers.Add(keyCount);
+                            }
                         }
 
-                        rootInfo.Methods.Add(methodInfo);
+                        typeInfo.Methods.Add(methodInfo);
                     }
                 }
 
-                if (rootInfo.Methods.Any())
+                if (typeInfo.Methods.Any())
                 {
-                    result.Add(rootInfo);
+                    result.TypeInfos.Add(typeInfo);
                 }
             }
 
