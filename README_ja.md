@@ -117,10 +117,10 @@ private partial class Class
 ```
 すると下記のような実装が生成されます。  
 ```.cs
-private static System.Collections.Generic.Dictionary<System.ValueTuple<int>, int> __MemoizationCacheValue_980d929936fa49b59a9d533a1c442eca__ = new System.Collections.Generic.Dictionary<System.ValueTuple<int>, int>();
+private static System.Collections.Generic.Dictionary<int, int> __MemoizationCacheValue_980d929936fa49b59a9d533a1c442eca__ = new System.Collections.Generic.Dictionary<int, int>();
 public static int MethodWithMemoization(int arg0)
 {
-    var __key__ = System.ValueTuple.Create(arg0);
+    var __key__ = arg0;
     if (__MemoizationCacheValue_980d929936fa49b59a9d533a1c442eca__.TryGetValue(__key__, out var __cache__))
     {
         return __cache__;
@@ -145,10 +145,10 @@ private partial class Class
 ```
 `Raw`サフィックスを使うことで以下の実装が生成されます。  
 ```.cs
-private static System.Collections.Generic.Dictionary<System.ValueTuple<int>, int> __MemoizationCacheValue_e99db10c9a424507be15cbcd47f085c3__ = new System.Collections.Generic.Dictionary<System.ValueTuple<int>, int>();
+private static System.Collections.Generic.Dictionary<int, int> __MemoizationCacheValue_e99db10c9a424507be15cbcd47f085c3__ = new System.Collections.Generic.Dictionary<int, int>();
 public static int Method(int arg0)
 {
-    var __key__ = System.ValueTuple.Create(arg0);
+    var __key__ = arg0;
     if (__MemoizationCacheValue_e99db10c9a424507be15cbcd47f085c3__.TryGetValue(__key__, out var __cache__))
     {
         return __cache__;
@@ -185,10 +185,10 @@ public static int MethodInternal(int arg0)
 ```
 `MethodName`パラメーターを参照し以下のような実装が生成されます。  
 ```.cs
-private static System.Collections.Generic.Dictionary<System.ValueTuple<int>, int> __MemoizationCacheValue_c119bf728a8546a282d1fa37ffa9d7e6__ = new System.Collections.Generic.Dictionary<System.ValueTuple<int>, int>();
+private static System.Collections.Generic.Dictionary<int, int> __MemoizationCacheValue_c119bf728a8546a282d1fa37ffa9d7e6__ = new System.Collections.Generic.Dictionary<int, int>();
 public static int MethodFast(int arg0)
 {
-    var __key__ = System.ValueTuple.Create(arg0);
+    var __key__ = arg0;
     if (__MemoizationCacheValue_c119bf728a8546a282d1fa37ffa9d7e6__.TryGetValue(__key__, out var __cache__))
     {
         return __cache__;
@@ -225,10 +225,10 @@ private static int MethodRaw(int arg0)
 すると、下記の実装が生成されます。  
 修飾子がpublicに変わっているのが確認できます。  
 ```.cs
-private static System.Collections.Generic.Dictionary<System.ValueTuple<int>, int> __MemoizationCacheValue_9c36aae2f3ed4842919001270b87e3c0__ = new System.Collections.Generic.Dictionary<System.ValueTuple<int>, int>();
+private static System.Collections.Generic.Dictionary<int, int> __MemoizationCacheValue_9c36aae2f3ed4842919001270b87e3c0__ = new System.Collections.Generic.Dictionary<int, int>();
 public static int Method(int arg0)
 {
-    var __key__ = System.ValueTuple.Create(arg0);
+    var __key__ = arg0;
     if (__MemoizationCacheValue_9c36aae2f3ed4842919001270b87e3c0__.TryGetValue(__key__, out var __cache__))
     {
         return __cache__;
@@ -239,11 +239,12 @@ public static int Method(int arg0)
 }
 ```
 
-### キャッシュ比較処理のカスタム
+### 上級者向けの機能
+#### キャッシュ比較処理のカスタム
 Memoizationはキャッシュをハッシュテーブルで参照します。  
 内部的にも可能な限り最適化していますが、以下のように`CacheComparer`パラメーターをカスタムすることで更なる高速化が可能です。  
 ```.cs
-public class CustomComparer : IEqualityComparer<ValueTuple<int>>
+public class CustomComparer : IEqualityComparer<int>
 {
   :
 }
@@ -256,8 +257,38 @@ private static int MethodRaw(int arg0)
 ```
 すると実装されるDictionaryに`CustomComparer`が割り当てられます。  
 ```
-private static System.Collections.Generic.Dictionary<System.ValueTuple<int>, int> __MemoizationCacheValue_eddb945ad3a8410db30f0a8eebf6af87__ = new System.Collections.Generic.Dictionary<System.ValueTuple<int>, int>(new CustomComparer());
+private static System.Collections.Generic.Dictionary<int, int> __MemoizationCacheValue_eddb945ad3a8410db30f0a8eebf6af87__ = new System.Collections.Generic.Dictionary<int, int>(new CustomComparer());
 ```
+
+#### キャッシュ生成時のコールバックを作成
+キャッシュが作成されたことを検知したい場合は`OnCachedMethod`パラメーターに関数名を設定します。
+```.cs
+[Memoization(OnCachedMethod = nameof(OnCached))]
+private static int MethodRaw(int arg0)
+{
+    :
+}
+```
+partial関数が定義されますのでpartial定義に従って実装をカスタムしましょう。
+```.cs
+private partial static void OnCached(int key, int result)
+{
+    :
+}
+```
+
+#### キャッシュへの割り込み
+キャッシュの事前作成やMemoizationメソッド間でキャッシュの共有をしたい場合があります。  
+そういった場合は`InterruptCacheMethod`パラメーターに関数名を設定します。  
+```.cs
+[Memoization(InterruptCacheMethod = nameof(InterruptCache))]
+private static int MethodRaw(int arg0)
+{
+    :
+}
+```
+するとキャッシュへの値の追加や変更を行う関数が生成されます。  
+ただし、この操作はキャッシュ内を自由に操作できてしまうため想定外の動作を引き起こす危険があります。  
 
 ## 禁止されている設定
 ### partialでない型への適用

@@ -7,7 +7,6 @@ using Microsoft.CodeAnalysis.Text;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -39,7 +38,6 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
             public string NameSpace;
             public string Name;
             public List<MethodInfo> Methods;
-
             public string FileName
             {
                 get
@@ -109,6 +107,8 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
             public bool IsThreadSafe;
             public string ReturnType;
             public bool HasGenericTypeInReturn;
+            public string InterruptCacheMethod;
+            public string OnCachedMethod;
             public List<GenericParameterInfo> GenericParameters;
             public List<ParameterInfo> Parameters;
             private static readonly HashSet<string> SimpleKeys = new HashSet<string>()
@@ -434,6 +434,20 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                     }
 
                     return $"{RawName}{genericArgs}({Args})";
+                }
+            }
+
+            public string OnCachedMethodWithGeneric
+            {
+                get
+                {
+                    string genericArgs = string.Empty;
+                    if (!string.IsNullOrEmpty(GenericArgs))
+                    {
+                        genericArgs = $"<{GenericArgs}>";
+                    }
+
+                    return $"{OnCachedMethod}{genericArgs}";
                 }
             }
 
@@ -892,6 +906,8 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
             }
         }
 
+        private static readonly Regex NameOfMatch = new Regex("^nameof\\(.*\\)$");
+
         public void Initialize(GeneratorInitializationContext context)
         {
         }
@@ -1089,12 +1105,13 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                     tg.Field.Generate(ModifierType.Private | ModifierType.Static, "System.Collections.Concurrent.ConcurrentStack<System.Collections.IDictionary>", concurrentCacheValues, "new System.Collections.Concurrent.ConcurrentStack<System.Collections.IDictionary>()");
                 }
 
-                foreach (var method in typeInfo.Methods)
+                foreach (var method in typeInfo.Methods.OrderBy(v => v.Name))
                 {
                     var cacheValueTypeDeclarationName = method.CacheValueTypeDeclarationName;
                     var cacheValueType = method.CacheValueTypeName;
                     var cachingStyle = method.CachingStyle;
                     var comparer = method.Comparer;
+                    var onCachedMethod = method.OnCachedMethod;
 
                     if (method.IsUseStaticTypeCache)
                     {
@@ -1112,22 +1129,26 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                             }
 
                             ttg.Field.Generate(ModifierType.Public | ModifierType.Static, cacheValueTypeDeclarationName, "Cache", method.FieldInitializer);
-                            if (cachingStyle != CachingStyle.Direct)
+                            if (cachingStyle != CachingStyle.Direct && method.IsClearable && method.HasGenericParameter)
                             {
-                                if (method.IsClearable && method.HasGenericParameter)
+                                ttg.Method.Generate(ModifierType.Static, string.Empty, method.StaticFieldWrappedType, cg =>
                                 {
-                                    ttg.Method.Generate(ModifierType.Static, string.Empty, method.StaticFieldWrappedType, cg =>
+                                    if (method.IsThreadSafe)
                                     {
-                                        if (method.IsThreadSafe)
-                                        {
-                                            cg.Code.Generate($"{concurrentCacheValues}.Push(Cache);");
-                                        }
-                                        else
-                                        {
-                                            cg.Code.Generate($"{cacheValues}.Push(Cache);");
-                                        }
-                                    });
-                                }
+                                        cg.Code.Generate($"{concurrentCacheValues}.Push(Cache);");
+                                    }
+                                    else
+                                    {
+                                        cg.Code.Generate($"{cacheValues}.Push(Cache);");
+                                    }
+                                });
+                            }
+                            else if (cachingStyle == CachingStyle.Direct && !string.IsNullOrEmpty(onCachedMethod))
+                            {
+                                ttg.Method.Generate(ModifierType.Static, string.Empty, method.StaticFieldWrappedType, cg =>
+                                {
+                                    cg.Code.Generate($"{method.OnCachedMethodWithGeneric}(Cache);");
+                                });
                             }
                         });
                     }
@@ -1137,6 +1158,101 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                     }
 
                     GenerateCacheMethod(tg.Method, method);
+                    var interruptCacheMethod = method.InterruptCacheMethod;
+                    if (!string.IsNullOrEmpty(interruptCacheMethod))
+                    {
+                        var type = method.IsStatic ? ModifierType.Static : ModifierType.None;
+                        tg.Method.Generate(ModifierType.Private | type, "void", interruptCacheMethod, mg =>
+                        {
+                            foreach (var parameter in method.GenericParameters)
+                            {
+                                mg.GenericParam.Generate(parameter.Type, gg =>
+                                {
+                                    foreach (var attribute in parameter.Attributes)
+                                    {
+                                        gg.Attribute.Generate(attribute);
+                                    }
+
+                                    foreach (var where in parameter.Wheres)
+                                    {
+                                        gg.Where.Generate(where);
+                                    }
+                                });
+                            }
+
+                            switch (cachingStyle)
+                            {
+                                case CachingStyle.Direct:
+                                    mg.Param.Generate(method.ResultType, "result");
+                                    mg.Code.Generate($"{method.CacheValueName} = result;");
+                                    break;
+                                case CachingStyle.NoneKey:
+                                    mg.Param.Generate(method.ResultType, "result");
+                                    mg.Code.Generate($"{method.CacheValueName}.Set(result)");
+                                    break;
+                                case CachingStyle.SingleKey:
+                                case CachingStyle.MultipleKey:
+                                    mg.Param.Generate(method.KeyType, "key");
+                                    mg.Param.Generate(method.ResultType, "result");
+
+                                    if (method.IsThreadSafe)
+                                    {
+                                        mg.Code.Generate($"if (!{method.CacheValueName}.TryAdd(key, result))", () =>
+                                        {
+                                            mg.Code.Generate($"{method.CacheValueName}[key] = result;");
+                                        });
+                                    }
+                                    else
+                                    {
+                                        mg.Code.Generate($"if ({method.CacheValueName}.ContainsKey(key))", () =>
+                                        {
+                                            mg.Code.Generate($"{method.CacheValueName}[key] = result;");
+                                        });
+                                        mg.Code.Generate($"else", () =>
+                                        {
+                                            mg.Code.Generate($"{method.CacheValueName}.Add(key, result);");
+                                        });
+                                    }
+                                    break;
+                            }
+                        });
+                    }
+
+                    if (!string.IsNullOrEmpty(onCachedMethod))
+                    {
+                        var type = method.IsStatic ? ModifierType.Static : ModifierType.None;
+                        tg.Method.Generate(ModifierType.Private | ModifierType.Partial | type, "void", onCachedMethod, mg =>
+                        {
+                            foreach (var parameter in method.GenericParameters)
+                            {
+                                mg.GenericParam.Generate(parameter.Type, gg =>
+                                {
+                                    foreach (var attribute in parameter.Attributes)
+                                    {
+                                        gg.Attribute.Generate(attribute);
+                                    }
+
+                                    foreach (var where in parameter.Wheres)
+                                    {
+                                        gg.Where.Generate(where);
+                                    }
+                                });
+                            }
+
+                            switch (cachingStyle)
+                            {
+                                case CachingStyle.Direct:
+                                case CachingStyle.NoneKey:
+                                    mg.Param.Generate(method.ResultType, "result");
+                                    break;
+                                case CachingStyle.SingleKey:
+                                case CachingStyle.MultipleKey:
+                                    mg.Param.Generate(method.KeyType, "key");
+                                    mg.Param.Generate(method.ResultType, "result");
+                                    break;
+                            }
+                        });
+                    }
                 }
 
                 var clearableInstanceMethods = typeInfo.Methods.Where(v => v.IsClearable && !v.IsUseStaticCache).ToArray();
@@ -1196,6 +1312,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
             var key = method.Key;
             var result = method.Result;
             var cacheValue = method.CacheValueName;
+            var onCachedMethod = method.OnCachedMethod;
 
             methodGenerator.Generate(method.Modifier, method.ReturnType, method.Name, mg =>
             {
@@ -1288,6 +1405,11 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                         }
                         mg.Code.Generate($"{cacheValue}.Set({result});");
 
+                        if (!string.IsNullOrEmpty(onCachedMethod))
+                        {
+                            mg.Code.Generate($"{method.OnCachedMethodWithGeneric}(__result__);");
+                        }
+
                         if (method.HasReturnType)
                         {
                             mg.Code.Generate($"return __result__;");
@@ -1320,6 +1442,11 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                         else
                         {
                             mg.Code.Generate($"{cacheValue}.Add(__key__, {result});");
+                        }
+
+                        if (!string.IsNullOrEmpty(onCachedMethod))
+                        {
+                            mg.Code.Generate($"{method.OnCachedMethodWithGeneric}(__key__, __result__);");
                         }
 
                         if (method.HasReturnType)
@@ -1408,9 +1535,17 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                             continue;
                         }
 
+                        GetAttributeArgument(memoize, "Modifier", null, out string modifierLabel);
+                        GetAttributeArgument(memoize, "MethodName", null, out string memoizationMethodName);
+                        GetAttributeArgument(memoize, "IsClearable", false, out bool isClearable);
+                        GetAttributeArgument(memoize, "IsThreadSafe", false, out bool isThreadSafe);
+                        GetAttributeArgument(memoize, "CacheComparer", null, out string cacheComparer);
+                        GetAttributeArgument(memoize, "InterruptCacheMethod", null, out string interruptCacheMethod);
+                        GetAttributeArgument(memoize, "OnCachedMethod", null, out string onCachedMethod);
+
                         var methodName = method.Identifier.ToString();
+
                         ModifierType methodModifier;
-                        var modifierLabel= memoize.GetArgument("Modifier")?.Expression?.ToString()?.Replace("\"", string.Empty);
                         if (string.IsNullOrEmpty(modifierLabel))
                         {
                             methodModifier = ScriptGeneratorUtils.GetModifierType(method.Modifiers.ToString());
@@ -1431,8 +1566,6 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                             continue;
                         }
 
-                        var nameofMatch = new Regex("^nameof\\(.*\\)$");
-                        var memoizationMethodName = memoize.GetArgument("MethodName")?.Expression?.ToString()?.Replace("\"", string.Empty);
                         if (string.IsNullOrEmpty(memoizationMethodName))
                         {
                             var rawMethodSuffix = "Raw";
@@ -1446,14 +1579,6 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                                 memoizationMethodName = $"{methodName}WithMemoization";
                             }
                         }
-                        else if (nameofMatch.IsMatch(memoizationMethodName))
-                        {
-                            memoizationMethodName = memoizationMethodName.Substring(7, memoizationMethodName.Length - 8).Split('.').Last();
-                        }
-
-                        var cacheComparer = memoize.GetArgument("CacheComparer")?.Expression?.ToString()?.Replace("\"", string.Empty);
-                        var isClearable = memoize.GetArgument("IsClearable")?.Expression?.ToString() == "true";
-                        var isThreadSafe = memoize.GetArgument("IsThreadSafe")?.Expression?.ToString() == "true";
 
                         var methodInfo = new MethodInfo()
                         {
@@ -1466,6 +1591,8 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                             CacheComparer = cacheComparer,
                             IsClearable = isClearable,
                             IsThreadSafe = isThreadSafe,
+                            InterruptCacheMethod = interruptCacheMethod,
+                            OnCachedMethod = onCachedMethod,
                             GenericParameters = new List<GenericParameterInfo>(),
                             Parameters = new List<ParameterInfo>(),
                         };
@@ -1550,6 +1677,42 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
             }
 
             return genericParameters.Contains(type.ToString());
+        }
+
+        private static void GetAttributeArgument(AttributeSyntax attr, string name, string defaultValue, out string result)
+        {
+            var str = attr.GetArgument(name)?.Expression?.ToString();
+            if (str == null)
+            {
+                result = defaultValue;
+                return;
+            }
+
+            if (str == "null")
+            {
+                result = null;
+                return;
+            }
+
+            str = str?.Replace("\"", string.Empty);
+            if (NameOfMatch.IsMatch(str))
+            {
+                str = str.Substring(7, str.Length - 8).Split('.').Last();
+            }
+
+            result = str;
+        }
+
+        private static void GetAttributeArgument(AttributeSyntax attr, string name, bool defaultValue, out bool result)
+        {
+            var str = attr.GetArgument(name)?.Expression?.ToString();
+            if (str == null)
+            {
+                result = defaultValue;
+                return;
+            }
+
+            result = str == "true";
         }
     }
 }

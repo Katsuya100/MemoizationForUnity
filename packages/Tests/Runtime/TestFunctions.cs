@@ -140,10 +140,135 @@ namespace Katuusagi.MemoizationForUnity.Tests
             return AppDomain.CurrentDomain.GetAssemblies().SelectMany(v => v.GetTypes()).ToArray();
         }
 
-        [Memoization]
+        [Memoization(InterruptCacheMethod = nameof(InterruptMethodInfoCache), OnCachedMethod = nameof(OnCachedMethodInfo))]
+        public static MethodInfo GetMethodInfoRaw(Type type, string name)
+        {
+            return type.GetMethod(name);
+        }
+
+        private static partial void OnCachedMethodInfo((Type type, string name) key, MethodInfo result)
+        {
+            InterruptMethodInfoCache((key.type, key.name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public), result);
+        }
+
+
+        [Memoization(InterruptCacheMethod = nameof(InterruptMethodInfoCache), OnCachedMethod = nameof(OnCachedMethodInfo))]
         public static MethodInfo GetMethodInfoRaw(Type type, string name, BindingFlags bindingFlags)
         {
             return type.GetMethod(name, bindingFlags);
+        }
+
+        private static partial void OnCachedMethodInfo((Type type, string name, BindingFlags bindingFlags) key, MethodInfo result)
+        {
+            InterruptMethodInfoCache((key.type, key.name), result);
+        }
+
+        [Memoization(InterruptCacheMethod = nameof(InterruptMethodInfoCache), OnCachedMethod = nameof(OnCachedMethodInfo))]
+        public static MethodInfo GetMethodInfoRaw<T>(string name, BindingFlags bindingFlags)
+        {
+            return typeof(T).GetMethod(name, bindingFlags);
+        }
+
+        private static partial void OnCachedMethodInfo<T>((string name, BindingFlags bindingFlags) key, MethodInfo result)
+        {
+            InterruptMethodInfoCache((typeof(T), key.name), result);
+            InterruptMethodInfoCache((typeof(T), key.name, key.bindingFlags), result);
+
+            InterruptMethodInfoCache<T>(ValueTuple.Create(key.Item1), result);
+        }
+
+        [Memoization(InterruptCacheMethod = nameof(InterruptMethodInfoCache), OnCachedMethod = nameof(OnCachedMethodInfo))]
+        public static MethodInfo GetMethodInfoRaw<T>(string name)
+        {
+            return typeof(T).GetMethod(name);
+        }
+
+        private static partial void OnCachedMethodInfo<T>(ValueTuple<string> key, MethodInfo result)
+        {
+            InterruptMethodInfoCache((typeof(T), key.Item1), result);
+            InterruptMethodInfoCache((typeof(T), key.Item1, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public), result);
+
+            InterruptMethodInfoCache<T>((key.Item1, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public), result);
+        }
+
+        [Memoization(InterruptCacheMethod = nameof(InterruptMethodInfosCache), OnCachedMethod = nameof(OnCachedMethodInfos))]
+        public static MethodInfo[] GetMethodInfosRaw(Type type)
+        {
+            return type.GetMethods();
+        }
+
+        private static partial void OnCachedMethodInfos(ValueTuple<Type> key, MethodInfo[] result)
+        {
+            foreach (var method in result)
+            {
+                InterruptMethodInfoCache((key.Item1, method.Name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public), method);
+                InterruptMethodInfoCache((key.Item1, method.Name), method);
+            }
+
+            InterruptMethodInfosCache((key.Item1, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public), result);
+        }
+
+        [Memoization(InterruptCacheMethod = nameof(InterruptMethodInfosCache), OnCachedMethod = nameof(OnCachedMethodInfos))]
+        public static MethodInfo[] GetMethodInfosRaw(Type type, BindingFlags bindingFlags)
+        {
+            return type.GetMethods(bindingFlags);
+        }
+
+        private static partial void OnCachedMethodInfos((Type type, BindingFlags bindingFlags) key, MethodInfo[] result)
+        {
+            foreach (var method in result)
+            {
+                InterruptMethodInfoCache((key.type, method.Name, key.bindingFlags), method);
+                InterruptMethodInfoCache((key.type, method.Name), method);
+            }
+
+            InterruptMethodInfosCache(ValueTuple.Create(key.type), result);
+        }
+
+        [Memoization(InterruptCacheMethod = nameof(InterruptMethodInfosCache), OnCachedMethod = nameof(OnCachedMethodInfos))]
+        public static MethodInfo[] GetMethodInfosRaw<T>()
+        {
+            return typeof(T).GetMethods();
+        }
+
+        private static partial void OnCachedMethodInfos<T>(MethodInfo[] result)
+        {
+            foreach (var method in result)
+            {
+                InterruptMethodInfoCache((typeof(T), method.Name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public), method);
+                InterruptMethodInfoCache((typeof(T), method.Name), method);
+
+                InterruptMethodInfoCache<T>((method.Name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public), method);
+                InterruptMethodInfoCache<T>(ValueTuple.Create(method.Name), method);
+            }
+
+            InterruptMethodInfosCache(ValueTuple.Create(typeof(T)), result);
+            InterruptMethodInfosCache((typeof(T), BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public), result);
+
+            InterruptMethodInfosCache<T>(ValueTuple.Create(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public), result);
+        }
+
+        [Memoization(InterruptCacheMethod = nameof(InterruptMethodInfosCache), OnCachedMethod = nameof(OnCachedMethodInfos))]
+        public static MethodInfo[] GetMethodInfosRaw<T>(BindingFlags bindingFlags)
+        {
+            return typeof(T).GetMethods(bindingFlags);
+        }
+
+        private static partial void OnCachedMethodInfos<T>(ValueTuple<BindingFlags> key, MethodInfo[] result)
+        {
+            foreach (var method in result)
+            {
+                InterruptMethodInfoCache((typeof(T), method.Name, key.Item1), method);
+                InterruptMethodInfoCache((typeof(T), method.Name), method);
+
+                InterruptMethodInfoCache<T>((method.Name, key.Item1), method);
+                InterruptMethodInfoCache<T>(ValueTuple.Create(method.Name), method);
+            }
+
+            InterruptMethodInfosCache(ValueTuple.Create(typeof(T)), result);
+            InterruptMethodInfosCache((typeof(T), BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public), result);
+
+            InterruptMethodInfosCache<T>(result);
         }
 
         private void Dummy()
