@@ -9,7 +9,7 @@ namespace Katuusagi.CSharpScriptGenerator
         public List<PreProcessData> PreProcesses = new List<PreProcessData>();
         public List<AttributeData> Attributes = new List<AttributeData>();
         public List<GenericParameterData> GenericParams = null;
-        public List<BaseTypeData> BaseTypes = new List<BaseTypeData>();
+        public List<ITypeNameData> BaseTypes = new List<ITypeNameData>();
         public List<EventData> Events = new List<EventData>();
         public List<FieldData> Fields = new List<FieldData>();
         public List<PropertyData> Properties = new List<PropertyData>();

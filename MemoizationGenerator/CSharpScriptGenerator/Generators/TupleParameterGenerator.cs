@@ -4,13 +4,13 @@ using System.Linq;
 
 namespace Katuusagi.CSharpScriptGenerator
 {
-    public class AttributeGenerator
+    public class TupleParameterGenerator
     {
-        public List<AttributeData> Result { get; private set; } = new List<AttributeData>();
+        public List<TupleParameterData> Result { get; private set; } = new List<TupleParameterData>();
 
-        public void Generate(string type)
+        public void Generate(string type, string name = null)
         {
-            Generate(g =>
+            Generate(name, g =>
             {
                 g.Type.Generate(type);
             });
@@ -18,17 +18,21 @@ namespace Katuusagi.CSharpScriptGenerator
 
         public void Generate(Action<Children> scope)
         {
+            Generate(null, scope);
+        }
+
+        public void Generate(string name, Action<Children> scope)
+        {
             var gen = new Children()
             {
                 Type = new TypeNameGenerator(),
-                Arg = new StatementGenerator(),
             };
             scope?.Invoke(gen);
 
-            var data = new AttributeData()
+            var data = new TupleParameterData()
             {
                 Type = gen.Type.Result.LastOrDefault(),
-                Args = gen.Arg.Result,
+                Name = name,
             };
             Result.Add(data);
         }
@@ -36,7 +40,6 @@ namespace Katuusagi.CSharpScriptGenerator
         public struct Children
         {
             public TypeNameGenerator Type;
-            public StatementGenerator Arg;
         }
     }
 }

@@ -271,6 +271,7 @@ namespace Katuusagi.MemoizationForUnity.Tests
             InterruptMethodInfosCache<T>(result);
         }
 
+
         private void Dummy()
         {
         }

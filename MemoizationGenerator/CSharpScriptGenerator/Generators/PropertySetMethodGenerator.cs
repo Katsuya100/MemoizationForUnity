@@ -1,8 +1,9 @@
 using System;
+using System.Collections.Generic;
 
 namespace Katuusagi.CSharpScriptGenerator
 {
-    public class PropertyMethodGenerator
+    public class PropertySetMethodGenerator
     {
         public PropertyMethodData Result { get; private set; } = null;
 
@@ -11,7 +12,8 @@ namespace Katuusagi.CSharpScriptGenerator
             var gen = new Children()
             {
                 Attribute = new AttributeGenerator(),
-                Code = new CodeGenerator(),
+                ParamAttribute = new AttributeGenerator(),
+                Statement = new StatementGenerator(),
             };
             scope?.Invoke(gen);
 
@@ -19,14 +21,17 @@ namespace Katuusagi.CSharpScriptGenerator
             {
                 Modifier = modifier,
                 Attributes = gen.Attribute.Result,
-                Code = gen.Code.Result,
+                ParamAttributes = gen.ParamAttribute.Result,
+                ReturnAttributes = new List<AttributeData>(),
+                Statements = gen.Statement.Result,
             };
         }
 
         public struct Children
         {
             public AttributeGenerator Attribute;
-            public CodeGenerator Code;
+            public AttributeGenerator ParamAttribute;
+            public StatementGenerator Statement;
         }
     }
 }

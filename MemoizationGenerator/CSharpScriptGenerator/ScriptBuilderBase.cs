@@ -28,6 +28,11 @@ namespace Katuusagi.CSharpScriptGenerator
 
         protected void AppendLine(string str = "")
         {
+            if (str == null)
+            {
+                return;
+            }
+
             if (_builder.Length > 0 &&
                 _builder[_builder.Length - 1] == '\n')
             {

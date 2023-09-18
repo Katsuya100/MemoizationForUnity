@@ -8,6 +8,7 @@ namespace Katuusagi.MemoizationForUnity
         public string MethodName { get; set; } = null;
         public bool IsClearable { get; set; } = false;
         public bool IsThreadSafe { get; set; } = false;
+        public bool CompareArrayElement { get; set; } = false;
         public string CacheComparer { get; set; } = null;
         public string InterruptCacheMethod { get; set; } = null;
         public string OnCachedMethod { get; set; } = null;

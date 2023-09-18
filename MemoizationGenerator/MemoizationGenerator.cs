@@ -23,11 +23,34 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
     [Generator]
     public class MemoizationGenerator : ISourceGenerator
     {
+        private class FlagsComparer : IEqualityComparer<bool[]>
+        {
+            public static readonly FlagsComparer Default = new FlagsComparer();
+
+            bool IEqualityComparer<bool[]>.Equals(bool[] x, bool[] y)
+            {
+                return x.SequenceEqual(y);
+            }
+
+            int IEqualityComparer<bool[]>.GetHashCode(bool[] obj)
+            {
+                // 引数の数が32を超えることはほぼないだろうからこれで
+                uint hash = 0;
+                var min = Math.Min(obj.Length, 32);
+                for (int i = 0; i < min; ++i)
+                {
+                    hash |= 1U << (i % 32);
+                }
+
+                return (int)(hash ^ obj.Length);
+            }
+        }
         private struct RootInfo
         {
             public List<TypeInfo> TypeInfos;
             public HashSet<int> AdditionalDefaultComparers;
             public HashSet<int> AdditionalParamsComparers;
+            public HashSet<bool[]> ArrayElementComparers;
         }
 
         private struct TypeInfo
@@ -102,6 +125,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
             public ModifierType Modifier;
             public string Name;
             public string RawName;
+            public bool CompareArrayElement;
             public string CacheComparer;
             public bool IsClearable;
             public bool IsThreadSafe;
@@ -111,6 +135,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
             public string OnCachedMethod;
             public List<GenericParameterInfo> GenericParameters;
             public List<ParameterInfo> Parameters;
+            public string ParameterArrayFlag;
             private static readonly HashSet<string> SimpleKeys = new HashSet<string>()
             {
                 "bool",
@@ -256,13 +281,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
             {
                 get
                 {
-                    int parameterCount = InputParameters.Count();
-                    if (IsUseTypeIdKey)
-                    {
-                        return parameterCount + 1;
-                    }
-
-                    return parameterCount;
+                    return KeyTypeArgs.Count();
                 }
             }
 
@@ -433,7 +452,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                         genericArgs = $"<{GenericArgs}>";
                     }
 
-                    return $"{RawName}{genericArgs}({Args})";
+                    return $"{RawName}{genericArgs}({ConcatArgs})";
                 }
             }
 
@@ -593,6 +612,22 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
+            public IEnumerable<string> KeyTypeArgs
+            {
+                get
+                {
+                    if (IsUseTypeIdKey)
+                    {
+                        yield return "int";
+                    }
+
+                    foreach (var parameter in InputParameters)
+                    {
+                        yield return parameter.Type;
+                    }
+                }
+            }
+
             public string KeyType
             {
                 get
@@ -601,14 +636,9 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                     switch (CachingStyle)
                     {
                         case CachingStyle.SingleKey:
-                            if (IsUseTypeIdKey)
+                            foreach (var arg in KeyTypeArgs)
                             {
-                                result = $"{result}int, ";
-                            }
-
-                            foreach (var parameter in InputParameters)
-                            {
-                                result = $"{result}{parameter.Type}, ";
+                                result = $"{result}{arg}, ";
                             }
 
                             if (!string.IsNullOrEmpty(result))
@@ -716,19 +746,14 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public string KeyTypeArgs
+            public string ConcatKeyTypeArgs
             {
                 get
                 {
                     string result = string.Empty;
-                    if (IsUseTypeIdKey)
+                    foreach (var arg in KeyTypeArgs)
                     {
-                        result = $"{result}int, ";
-                    }
-
-                    foreach (var parameter in InputParameters)
-                    {
-                        result = $"{result}{parameter.Type}, ";
+                        result = $"{result}{arg}, ";
                     }
 
                     if (!string.IsNullOrEmpty(result))
@@ -740,7 +765,32 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public string Args
+            public string ConcatArrayElementKeyTypeArgs
+            {
+                get
+                {
+                    string result = string.Empty;
+                    foreach (var arg in KeyTypeArgs)
+                    {
+                        string a = arg;
+                        if (a.EndsWith("[]"))
+                        {
+                            a = a.Remove(a.Length - 2, 2);
+                        }
+
+                        result = $"{result}{a}, ";
+                    }
+
+                    if (!string.IsNullOrEmpty(result))
+                    {
+                        result = result.Remove(result.Length - 2);
+                    }
+
+                    return result;
+                }
+            }
+
+            public string ConcatArgs
             {
                 get
                 {
@@ -813,15 +863,20 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                         return CacheComparer;
                     }
 
-                    var args = KeyTypeArgs;
-                    if (HasParams)
-                    {
-                        return $"Katuusagi.MemoizationForUnity.ParamsEqualityComparer<{args.Remove(args.Length - 2, 2)}>.Default";
-                    }
-
                     if (IsSimpleKey)
                     {
                         return string.Empty;
+                    }
+
+                    if (CompareArrayElement)
+                    {
+                        return $"Katuusagi.MemoizationForUnity.ArrayElementEqualityComparer{ParameterArrayFlag}<{ConcatArrayElementKeyTypeArgs}>.Default";
+                    }
+
+                    var args = ConcatKeyTypeArgs;
+                    if (HasParams)
+                    {
+                        return $"Katuusagi.MemoizationForUnity.ParamsEqualityComparer<{args.Remove(args.Length - 2, 2)}>.Default";
                     }
 
                     if (CachingStyle == CachingStyle.SingleKey)
@@ -946,7 +1001,8 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                     }
 
                     if (!rootInfo.AdditionalDefaultComparers.Any() &&
-                        !rootInfo.AdditionalParamsComparers.Any())
+                        !rootInfo.AdditionalParamsComparers.Any() &&
+                        !rootInfo.ArrayElementComparers.Any())
                     {
                         return;
                     }
@@ -981,26 +1037,26 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                                     }
 
                                     tg.BaseType.Generate($"IEqualityComparer<({gen})>");
-                                    tg.Property.Generate(ModifierType.Static | ModifierType.Public, $"MemoizationEqualityComparer<{gen}>", "Default", "new ()");
+                                    tg.Field.Generate(ModifierType.Static | ModifierType.ReadOnly | ModifierType.Public, $"MemoizationEqualityComparer<{gen}>", "Default", "new ()");
                                     tg.Method.Generate(ModifierType.None, "bool", $"IEqualityComparer<({gen})>.Equals", mg =>
                                     {
                                         mg.Param.Generate($"({gen})", "x");
                                         mg.Param.Generate($"({gen})", "y");
 
-                                        mg.Code.Generate($"return x.Equals(y);");
+                                        mg.Statement.Generate($"return x.Equals(y);");
                                     });
 
                                     tg.Method.Generate(ModifierType.None, "int", $"IEqualityComparer<({gen})>.GetHashCode", mg =>
                                     {
                                         mg.Param.Generate($"({gen})", "obj");
 
-                                        mg.Code.Generate($"var hash = new HashCode();");
+                                        mg.Statement.Generate($"var hash = new HashCode();");
                                         for (int i = 1; i <= count; ++i)
                                         {
-                                            mg.Code.Generate($"hash.Add(obj.Item{i});");
+                                            mg.Statement.Generate($"hash.Add(obj.Item{i});");
                                         }
 
-                                        mg.Code.Generate("return hash.ToHashCode();");
+                                        mg.Statement.Generate("return hash.ToHashCode();");
                                     });
                                 });
                             }
@@ -1026,36 +1082,153 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                                     }
 
                                     tg.BaseType.Generate($"IEqualityComparer<({gen}[])>");
-                                    tg.Property.Generate(ModifierType.Static | ModifierType.Public, $"ParamsEqualityComparer<{gen}>", "Default", "new ()");
+                                    tg.Field.Generate(ModifierType.Static | ModifierType.ReadOnly | ModifierType.Public, $"ParamsEqualityComparer<{gen}>", "Default", "new ()");
                                     tg.Method.Generate(ModifierType.None, "bool", $"IEqualityComparer<({gen}[])>.Equals", mg =>
                                     {
                                         mg.Param.Generate($"({gen}[])", "x");
                                         mg.Param.Generate($"({gen}[])", "y");
 
-                                        mg.Code.Generate($"return EqualityComparer<T1>.Default.Equals(x.Item1, y.Item1) &&");
+                                        mg.Statement.Generate($"return EqualityComparer<T1>.Default.Equals(x.Item1, y.Item1) &&");
                                         for (int i = 2; i < count; ++i)
                                         {
-                                            mg.Code.Generate($"       EqualityComparer<T{i}>.Default.Equals(x.Item{i}, y.Item{i}) &&");
+                                            mg.Statement.Generate($"       EqualityComparer<T{i}>.Default.Equals(x.Item{i}, y.Item{i}) &&");
                                         }
-                                        mg.Code.Generate($"       (x.Item{count} ?? Array.Empty<T{count}>()).SequenceEqual(y.Item{count} ?? Array.Empty<T{count}>());");
+                                        mg.Statement.Generate($"       (x.Item{count} ?? Array.Empty<T{count}>()).SequenceEqual(y.Item{count} ?? Array.Empty<T{count}>());");
                                     });
 
                                     tg.Method.Generate(ModifierType.None, "int", $"IEqualityComparer<({gen}[])>.GetHashCode", mg =>
                                     {
                                         mg.Param.Generate($"({gen}[])", "obj");
 
-                                        mg.Code.Generate($"var hash = new HashCode();");
+                                        mg.Statement.Generate($"var hash = new HashCode();");
                                         for (int i = 1; i < count; ++i)
                                         {
-                                            mg.Code.Generate($"hash.Add(obj.Item{i});");
+                                            mg.Statement.Generate($"hash.Add(obj.Item{i});");
                                         }
 
-                                        mg.Code.Generate($"foreach (var elem in obj.Item{count} ?? Array.Empty<T{count}>())", () =>
+                                        mg.Statement.Generate($"foreach (var elem in obj.Item{count} ?? Array.Empty<T{count}>())", () =>
                                         {
-                                            mg.Code.Generate("hash.Add(elem);");
+                                            mg.Statement.Generate("hash.Add(elem);");
                                         });
 
-                                        mg.Code.Generate("return hash.ToHashCode();");
+                                        mg.Statement.Generate("return hash.ToHashCode();");
+                                    });
+                                });
+                            }
+
+
+                            foreach (var flags in rootInfo.ArrayElementComparers)
+                            {
+                                var count = flags.Length;
+
+                                string parameterArrayFlag = string.Empty;
+                                string gen = string.Empty;
+                                string arrayGen = string.Empty;
+                                for (int i = 1; i <= count; ++i)
+                                {
+                                    gen += $"T{i}, ";
+                                    var isArray = flags[i - 1];
+                                    if (isArray)
+                                    {
+                                        arrayGen += $"T{i}[], ";
+                                        parameterArrayFlag += "1";
+                                    }
+                                    else
+                                    {
+                                        arrayGen += $"T{i}, ";
+                                        parameterArrayFlag += "0";
+                                    }
+                                }
+
+                                if (!string.IsNullOrEmpty(gen))
+                                {
+                                    gen = gen.Remove(gen.Length - 2, 2);
+                                    arrayGen = arrayGen.Remove(arrayGen.Length - 2, 2);
+                                }
+
+                                ng.Type.Generate(ModifierType.Internal | ModifierType.Sealed | ModifierType.Class, $"ArrayElementEqualityComparer{parameterArrayFlag}", tg =>
+                                {
+                                    for (int i = 1; i <= count; ++i)
+                                    {
+                                        tg.GenericParam.Generate($"T{i}");
+                                    }
+
+                                    tg.BaseType.Generate($"IEqualityComparer<({arrayGen})>");
+                                    tg.Field.Generate(ModifierType.Static | ModifierType.ReadOnly | ModifierType.Public, $"ArrayElementEqualityComparer{parameterArrayFlag}<{gen}>", "Default", "new ()");
+                                    tg.Method.Generate(ModifierType.None, "bool", $"IEqualityComparer<({arrayGen})>.Equals", mg =>
+                                    {
+                                        mg.Param.Generate($"({arrayGen})", "x");
+                                        mg.Param.Generate($"({arrayGen})", "y");
+
+                                        var isArray = flags[0];
+                                        if (count == 1)
+                                        {
+                                            if (isArray)
+                                            {
+                                                mg.Statement.Generate($"return (x.Item1 ?? Array.Empty<T1>()).SequenceEqual(y.Item1 ?? Array.Empty<T1>());");
+                                            }
+                                            else
+                                            {
+                                                mg.Statement.Generate($"return EqualityComparer<T1>.Default.Equals(x.Item1, y.Item1);");
+                                            }
+                                            return;
+                                        }
+
+                                        if (isArray)
+                                        {
+                                            mg.Statement.Generate($"return (x.Item1 ?? Array.Empty<T1>()).SequenceEqual(y.Item1 ?? Array.Empty<T1>()) &&");
+                                        }
+                                        else
+                                        {
+                                            mg.Statement.Generate($"return EqualityComparer<T1>.Default.Equals(x.Item1, y.Item1) &&");
+                                        }
+
+                                        for (int i = 2; i < count; ++i)
+                                        {
+                                            isArray = flags[i - 1];
+                                            if (isArray)
+                                            {
+                                                mg.Statement.Generate($"       (x.Item{i} ?? Array.Empty<T{i}>()).SequenceEqual(y.Item{i} ?? Array.Empty<T{i}>()) &&");
+                                            }
+                                            else
+                                            {
+                                                mg.Statement.Generate($"       EqualityComparer<T{i}>.Default.Equals(x.Item{i}, y.Item{i}) &&");
+                                            }
+                                        }
+
+                                        isArray = flags[count - 1];
+                                        if (isArray)
+                                        {
+                                            mg.Statement.Generate($"       (x.Item{count} ?? Array.Empty<T{count}>()).SequenceEqual(y.Item{count} ?? Array.Empty<T{count}>());");
+                                        }
+                                        else
+                                        {
+                                            mg.Statement.Generate($"       EqualityComparer<T{count}>.Default.Equals(x.Item{count}, y.Item{count});");
+                                        }
+                                    });
+
+                                    tg.Method.Generate(ModifierType.None, "int", $"IEqualityComparer<({arrayGen})>.GetHashCode", mg =>
+                                    {
+                                        mg.Param.Generate($"({arrayGen})", "obj");
+
+                                        mg.Statement.Generate($"var hash = new HashCode();");
+                                        for (int i = 1; i <= count; ++i)
+                                        {
+                                            var isArray = flags[i - 1];
+                                            if (isArray)
+                                            {
+                                                mg.Statement.Generate($"foreach (var elem in obj.Item{i} ?? Array.Empty<T{i}>())", () =>
+                                                {
+                                                    mg.Statement.Generate("hash.Add(elem);");
+                                                });
+                                            }
+                                            else
+                                            {
+                                                mg.Statement.Generate($"hash.Add(obj.Item{i});");
+                                            }
+                                        }
+
+                                        mg.Statement.Generate("return hash.ToHashCode();");
                                     });
                                 });
                             }
@@ -1135,11 +1308,11 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                                 {
                                     if (method.IsThreadSafe)
                                     {
-                                        cg.Code.Generate($"{concurrentCacheValues}.Push(Cache);");
+                                        cg.Statement.Generate($"{concurrentCacheValues}.Push(Cache);");
                                     }
                                     else
                                     {
-                                        cg.Code.Generate($"{cacheValues}.Push(Cache);");
+                                        cg.Statement.Generate($"{cacheValues}.Push(Cache);");
                                     }
                                 });
                             }
@@ -1147,7 +1320,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                             {
                                 ttg.Method.Generate(ModifierType.Static, string.Empty, method.StaticFieldWrappedType, cg =>
                                 {
-                                    cg.Code.Generate($"{method.OnCachedMethodWithGeneric}(Cache);");
+                                    cg.Statement.Generate($"{method.OnCachedMethodWithGeneric}(Cache);");
                                 });
                             }
                         });
@@ -1184,11 +1357,11 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                             {
                                 case CachingStyle.Direct:
                                     mg.Param.Generate(method.ResultType, "result");
-                                    mg.Code.Generate($"{method.CacheValueName} = result;");
+                                    mg.Statement.Generate($"{method.CacheValueName} = result;");
                                     break;
                                 case CachingStyle.NoneKey:
                                     mg.Param.Generate(method.ResultType, "result");
-                                    mg.Code.Generate($"{method.CacheValueName}.Set(result)");
+                                    mg.Statement.Generate($"{method.CacheValueName}.Set(result)");
                                     break;
                                 case CachingStyle.SingleKey:
                                 case CachingStyle.MultipleKey:
@@ -1197,20 +1370,20 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
 
                                     if (method.IsThreadSafe)
                                     {
-                                        mg.Code.Generate($"if (!{method.CacheValueName}.TryAdd(key, result))", () =>
+                                        mg.Statement.Generate($"if (!{method.CacheValueName}.TryAdd(key, result))", () =>
                                         {
-                                            mg.Code.Generate($"{method.CacheValueName}[key] = result;");
+                                            mg.Statement.Generate($"{method.CacheValueName}[key] = result;");
                                         });
                                     }
                                     else
                                     {
-                                        mg.Code.Generate($"if ({method.CacheValueName}.ContainsKey(key))", () =>
+                                        mg.Statement.Generate($"if ({method.CacheValueName}.ContainsKey(key))", () =>
                                         {
-                                            mg.Code.Generate($"{method.CacheValueName}[key] = result;");
+                                            mg.Statement.Generate($"{method.CacheValueName}[key] = result;");
                                         });
-                                        mg.Code.Generate($"else", () =>
+                                        mg.Statement.Generate($"else", () =>
                                         {
-                                            mg.Code.Generate($"{method.CacheValueName}.Add(key, result);");
+                                            mg.Statement.Generate($"{method.CacheValueName}.Add(key, result);");
                                         });
                                     }
                                     break;
@@ -1264,14 +1437,14 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                         {
                             if (method.IsUseBaseTypeCache)
                             {
-                                mg.Code.Generate($"foreach (var value in {method.CacheValueName}.Values)", () =>
+                                mg.Statement.Generate($"foreach (var value in {method.CacheValueName}.Values)", () =>
                                 {
-                                    mg.Code.Generate($"value.Clear();");
+                                    mg.Statement.Generate($"value.Clear();");
                                 });
                             }
                             else
                             {
-                                mg.Code.Generate($"{method.CacheValueName}.Clear();");
+                                mg.Statement.Generate($"{method.CacheValueName}.Clear();");
                             }
                         }
                     });
@@ -1284,23 +1457,23 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                     {
                         if (typeInfo.HasGenericClearableStaticTypeCache)
                         {
-                            mg.Code.Generate($"foreach (var value in {cacheValues})", () =>
+                            mg.Statement.Generate($"foreach (var value in {cacheValues})", () =>
                             {
-                                mg.Code.Generate($"value.Clear();");
+                                mg.Statement.Generate($"value.Clear();");
                             });
                         }
 
                         if (typeInfo.HasThreadSafeGenericClearableStaticTypeCache)
                         {
-                            mg.Code.Generate($"foreach (var value in {concurrentCacheValues})", () =>
+                            mg.Statement.Generate($"foreach (var value in {concurrentCacheValues})", () =>
                             {
-                                mg.Code.Generate($"value.Clear();");
+                                mg.Statement.Generate($"value.Clear();");
                             });
                         }
 
                         foreach (var method in clearableStaticMethods)
                         {
-                            mg.Code.Generate($"{method.CacheValueName}.Clear();");
+                            mg.Statement.Generate($"{method.CacheValueName}.Clear();");
                         }
                     });
                 }
@@ -1358,22 +1531,22 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                     var cacheValueTypeName = method.CacheValueTypeName;
                     var comparer = method.Comparer;
                     var typeKey = method.DeclarationKey;
-                    mg.Code.Generate($"var __typeKey__ = {typeKey};");
-                    mg.Code.Generate($"{cacheValueTypeName} __table__;");
-                    mg.Code.Generate($"if ({cacheValue}.TryGetValue(__typeKey__, out var __tmp__))", () =>
+                    mg.Statement.Generate($"var __typeKey__ = {typeKey};");
+                    mg.Statement.Generate($"{cacheValueTypeName} __table__;");
+                    mg.Statement.Generate($"if ({cacheValue}.TryGetValue(__typeKey__, out var __tmp__))", () =>
                     {
-                        mg.Code.Generate($"__table__ = __tmp__ as {cacheValueTypeName};");
+                        mg.Statement.Generate($"__table__ = __tmp__ as {cacheValueTypeName};");
                     });
-                    mg.Code.Generate($"else", () =>
+                    mg.Statement.Generate($"else", () =>
                     {
-                        mg.Code.Generate($"__table__ = new {cacheValueTypeName}({comparer});");
+                        mg.Statement.Generate($"__table__ = new {cacheValueTypeName}({comparer});");
                         if (method.IsThreadSafe)
                         {
-                            mg.Code.Generate($"{cacheValue}.TryAdd(__typeKey__, __table__);");
+                            mg.Statement.Generate($"{cacheValue}.TryAdd(__typeKey__, __table__);");
                         }
                         else
                         {
-                            mg.Code.Generate($"{cacheValue}.Add(__typeKey__, __table__);");
+                            mg.Statement.Generate($"{cacheValue}.Add(__typeKey__, __table__);");
                         }
                     });
 
@@ -1383,75 +1556,75 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 switch (method.CachingStyle)
                 {
                     case CachingStyle.Direct:
-                        mg.Code.Generate($"return {cacheValue};");
+                        mg.Statement.Generate($"return {cacheValue};");
                         return;
                     case CachingStyle.NoneKey:
-                        mg.Code.Generate($"if ({cacheValue}.IsCached)", () =>
+                        mg.Statement.Generate($"if ({cacheValue}.IsCached)", () =>
                         {
-                            mg.Code.Generate($"var __cache__ = {cacheValue}.Result;");
-                            foreach (var code in method.ResultReturnCodes)
+                            mg.Statement.Generate($"var __cache__ = {cacheValue}.Result;");
+                            foreach (var statement in method.ResultReturnCodes)
                             {
-                                mg.Code.Generate(code);
+                                mg.Statement.Generate(statement);
                             }
                         });
 
                         if (method.HasReturnType)
                         {
-                            mg.Code.Generate($"var __result__ = {method.CallRawMethod};");
+                            mg.Statement.Generate($"var __result__ = {method.CallRawMethod};");
                         }
                         else
                         {
-                            mg.Code.Generate($"{method.CallRawMethod};");
+                            mg.Statement.Generate($"{method.CallRawMethod};");
                         }
-                        mg.Code.Generate($"{cacheValue}.Set({result});");
+                        mg.Statement.Generate($"{cacheValue}.Set({result});");
 
                         if (!string.IsNullOrEmpty(onCachedMethod))
                         {
-                            mg.Code.Generate($"{method.OnCachedMethodWithGeneric}(__result__);");
+                            mg.Statement.Generate($"{method.OnCachedMethodWithGeneric}(__result__);");
                         }
 
                         if (method.HasReturnType)
                         {
-                            mg.Code.Generate($"return __result__;");
+                            mg.Statement.Generate($"return __result__;");
                         }
                         return;
                     case CachingStyle.SingleKey:
                     case CachingStyle.MultipleKey:
-                        mg.Code.Generate($"var __key__ = {key};");
-                        mg.Code.Generate($"if ({cacheValue}.TryGetValue(__key__, out var __cache__))", () =>
+                        mg.Statement.Generate($"var __key__ = {key};");
+                        mg.Statement.Generate($"if ({cacheValue}.TryGetValue(__key__, out var __cache__))", () =>
                         {
-                            foreach (var code in method.ResultReturnCodes)
+                            foreach (var statement in method.ResultReturnCodes)
                             {
-                                mg.Code.Generate(code);
+                                mg.Statement.Generate(statement);
                             }
                         });
 
                         if (method.HasReturnType)
                         {
-                            mg.Code.Generate($"var __result__ = {method.CallRawMethod};");
+                            mg.Statement.Generate($"var __result__ = {method.CallRawMethod};");
                         }
                         else
                         {
-                            mg.Code.Generate($"{method.CallRawMethod};");
+                            mg.Statement.Generate($"{method.CallRawMethod};");
                         }
 
                         if (method.IsThreadSafe)
                         {
-                            mg.Code.Generate($"{cacheValue}.TryAdd(__key__, {result});");
+                            mg.Statement.Generate($"{cacheValue}.TryAdd(__key__, {result});");
                         }
                         else
                         {
-                            mg.Code.Generate($"{cacheValue}.Add(__key__, {result});");
+                            mg.Statement.Generate($"{cacheValue}.Add(__key__, {result});");
                         }
 
                         if (!string.IsNullOrEmpty(onCachedMethod))
                         {
-                            mg.Code.Generate($"{method.OnCachedMethodWithGeneric}(__key__, __result__);");
+                            mg.Statement.Generate($"{method.OnCachedMethodWithGeneric}(__key__, __result__);");
                         }
 
                         if (method.HasReturnType)
                         {
-                            mg.Code.Generate($"return __result__;");
+                            mg.Statement.Generate($"return __result__;");
                         }
                         return;
                 }
@@ -1465,6 +1638,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 TypeInfos = new List<TypeInfo>(),
                 AdditionalDefaultComparers = new HashSet<int>(),
                 AdditionalParamsComparers = new HashSet<int>(),
+                ArrayElementComparers = new HashSet<bool[]>(FlagsComparer.Default),
             };
 
             var typeGroups = context.Compilation.SyntaxTrees
@@ -1539,9 +1713,25 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                         GetAttributeArgument(memoize, "MethodName", null, out string memoizationMethodName);
                         GetAttributeArgument(memoize, "IsClearable", false, out bool isClearable);
                         GetAttributeArgument(memoize, "IsThreadSafe", false, out bool isThreadSafe);
+                        GetAttributeArgument(memoize, "CompareArrayElement", false, out bool compareArrayElement);
                         GetAttributeArgument(memoize, "CacheComparer", null, out string cacheComparer);
                         GetAttributeArgument(memoize, "InterruptCacheMethod", null, out string interruptCacheMethod);
                         GetAttributeArgument(memoize, "OnCachedMethod", null, out string onCachedMethod);
+
+                        if (compareArrayElement)
+                        {
+                            if (cacheComparer != null)
+                            {
+                                context.Error("MEMOIZATION004", "Memoization failed.", "`CompareArrayElement` parameter and the `CacheComparer` parameter cannot be used simultaneously.", method.GetLocation());
+                                continue;
+                            }
+
+                            if (method.ParameterList == null || !method.ParameterList.Parameters.Any(v => v.Type.ToString().EndsWith("[]")))
+                            {
+                                context.Error("MEMOIZATION005", "Memoization failed.", "`CompareArrayElement` parameter cannot be used if method parameters does not have an array type.", method.GetLocation());
+                                continue;
+                            }
+                        }
 
                         var methodName = method.Identifier.ToString();
 
@@ -1588,6 +1778,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                             RawName = methodName,
                             ReturnType = method.ReturnType.ToString(),
                             Modifier = methodModifier,
+                            CompareArrayElement = compareArrayElement,
                             CacheComparer = cacheComparer,
                             IsClearable = isClearable,
                             IsThreadSafe = isThreadSafe,
@@ -1597,8 +1788,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                             Parameters = new List<ParameterInfo>(),
                         };
 
-                        if (method.TypeParameterList != null &&
-                            method.ParameterList != null)
+                        if (method.TypeParameterList != null)
                         {
                             foreach (var parameter in method.TypeParameterList.Parameters)
                             {
@@ -1616,19 +1806,22 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
 
                         methodInfo.HasGenericTypeInReturn = HasGenericTypes(method.ReturnType, methodInfo.GenericParameters.Select(v => v.Type));
 
-                        foreach (var parameter in method.ParameterList.Parameters)
+                        if (method.ParameterList != null)
                         {
-                            var parameterInfo = new ParameterInfo()
+                            foreach (var parameter in method.ParameterList.Parameters)
                             {
-                                Attributes = parameter.AttributeLists.SelectMany(v => v?.Attributes.Select(v2 => v2.ToFullString()) ?? Array.Empty<string>()).ToArray(),
-                                Modifier = parameter.Modifiers.ToString(),
-                                Type = parameter.Type.ToString(),
-                                Name = parameter.Identifier.ToString(),
-                                Default = parameter.Default?.Value?.ToString() ?? string.Empty,
-                                HasGenericType = HasGenericTypes(parameter.Type, methodInfo.GenericParameters.Select(v => v.Type)),
-                            };
+                                var parameterInfo = new ParameterInfo()
+                                {
+                                    Attributes = parameter.AttributeLists.SelectMany(v => v?.Attributes.Select(v2 => v2.ToFullString()) ?? Array.Empty<string>()).ToArray(),
+                                    Modifier = parameter.Modifiers.ToString(),
+                                    Type = parameter.Type.ToString(),
+                                    Name = parameter.Identifier.ToString(),
+                                    Default = parameter.Default?.Value?.ToString() ?? string.Empty,
+                                    HasGenericType = HasGenericTypes(parameter.Type, methodInfo.GenericParameters.Select(v => v.Type)),
+                                };
 
-                            methodInfo.Parameters.Add(parameterInfo);
+                                methodInfo.Parameters.Add(parameterInfo);
+                            }
                         }
 
                         if (!methodInfo.OutputParameters.Any() && !methodInfo.HasReturnType)
@@ -1637,16 +1830,41 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                             continue;
                         }
 
-                        var keyCount = methodInfo.CacheKeyCount;
-                        if (keyCount > 8 && methodInfo.CacheComparer == null)
+                        if (methodInfo.CompareArrayElement)
                         {
-                            if (methodInfo.HasParams)
+                            string parameterArrayFlag = string.Empty;
+                            var args = methodInfo.KeyTypeArgs.ToArray();
+                            bool[] flags = new bool[args.Length];
+                            for (int i = 0; i < args.Length; ++i)
                             {
-                                result.AdditionalParamsComparers.Add(keyCount);
+                                var arg = args[i];
+                                if (arg.EndsWith("[]"))
+                                {
+                                    flags[i] = true;
+                                    parameterArrayFlag += "1";
+                                }
+                                else
+                                {
+                                    flags[i] = false;
+                                    parameterArrayFlag += "0";
+                                }
                             }
-                            else
+                            result.ArrayElementComparers.Add(flags);
+                            methodInfo.ParameterArrayFlag = parameterArrayFlag;
+                        }
+                        else
+                        {
+                            var keyCount = methodInfo.CacheKeyCount;
+                            if (keyCount > 8 && methodInfo.CacheComparer == null)
                             {
-                                result.AdditionalDefaultComparers.Add(keyCount);
+                                if (methodInfo.HasParams)
+                                {
+                                    result.AdditionalParamsComparers.Add(keyCount);
+                                }
+                                else
+                                {
+                                    result.AdditionalDefaultComparers.Add(keyCount);
+                                }
                             }
                         }
 

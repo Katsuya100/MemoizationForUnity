@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Katuusagi.CSharpScriptGenerator
 {
@@ -7,41 +8,53 @@ namespace Katuusagi.CSharpScriptGenerator
     {
         public List<FieldData> Result { get; private set; } = new List<FieldData>();
 
-        public void Generate(ModifierType modifier, string type, string name, string defaultValue)
+        public void Generate(ModifierType modifier, string type, string name, string defaultValue = "")
         {
-            Generate(modifier, type, name, dg =>
+            Generate(modifier, name, g =>
             {
+                g.Type.Generate(type);
                 if (!string.IsNullOrEmpty(defaultValue))
                 {
-                    dg.Default.Generate(defaultValue);
+                    g.Default.Generate(defaultValue);
                 }
             });
         }
 
-        public void Generate(ModifierType modifier, string type, string name, Action<Children> scope = null)
+        public void Generate(ModifierType modifier, string type, string name, Action<Children> scope)
+        {
+            Generate(modifier, name, g =>
+            {
+                g.Type.Generate(type);
+                scope?.Invoke(g);
+            });
+        }
+
+        public void Generate(ModifierType modifier, string name, Action<Children> scope)
         {
             var gen = new Children()
             {
+                Type = new TypeNameGenerator(),
                 Attribute = new AttributeGenerator(),
-                Default = new CodeGenerator(),
+                Default = new StatementGenerator(),
             };
             scope?.Invoke(gen);
 
             var field = new FieldData()
             {
                 Modifier = modifier,
-                Type = type,
+                Type = gen.Type.Result.LastOrDefault(),
                 Name = name,
                 Attributes = gen.Attribute.Result,
-                Default = gen.Default.Result,
+                Default = gen.Default.Result.LastOrDefault(),
             };
             Result.Add(field);
         }
 
         public struct Children
         {
+            public TypeNameGenerator Type;
             public AttributeGenerator Attribute;
-            public CodeGenerator Default;
+            public StatementGenerator Default;
         }
     }
 }

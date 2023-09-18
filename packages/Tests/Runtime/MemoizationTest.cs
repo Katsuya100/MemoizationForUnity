@@ -189,8 +189,18 @@ namespace Katuusagi.MemoizationForUnity.Tests
         [Test]
         public void StaticManyParameter()
         {
+            TestFunctions.StaticParams(default, default, default, default, default, default, default, default, default);
             TestFunctions.StaticManyParameter(default, default, default, default, default, default, default, default, default);
+            TestFunctions.StaticManyParameterAndParams(default, default, default, default, default, default, default, default, default, default, default, default);
             TestFunctions.StaticManyGenericParameter(default(float), default(float), default(float), default(float), default(float), default(float), default(float), default(float), default(float));
+        }
+
+        [Test]
+        public void StaticArrayElement()
+        {
+            var l = TestFunctions.StaticArrayElement(new int[] { 10, 20 }, 30, new int[] { 40, 50, 60 });
+            var r = TestFunctions.StaticArrayElement(new int[] { 10, 20 }, 30, new int[] { 40, 50, 60 });
+            Assert.AreEqual(l, r);
         }
 
         [Test]
@@ -384,8 +394,19 @@ namespace Katuusagi.MemoizationForUnity.Tests
         public void InstanceManyParameter()
         {
             var funcs = new TestFunctions();
+            funcs.InstanceParams(default, default, default, default, default, default, default, default, default);
             funcs.InstanceManyParameter(default, default, default, default, default, default, default, default, default);
+            funcs.InstanceManyParameterAndParams(default, default, default, default, default, default, default, default, default, default, default, default);
             funcs.InstanceManyGenericParameter(default(float), default(float), default(float), default(float), default(float), default(float), default(float), default(float), default(float));
+        }
+
+        [Test]
+        public void InstanceArrayElement()
+        {
+            var funcs = new TestFunctions();
+            var l = funcs.InstanceArrayElement(new int[] { 10, 20 }, 30, new int[] { 40, 50, 60 });
+            var r = funcs.InstanceArrayElement(new int[] { 10, 20 }, 30, new int[] { 40, 50, 60 });
+            Assert.AreEqual(l, r);
         }
 
         [Test]

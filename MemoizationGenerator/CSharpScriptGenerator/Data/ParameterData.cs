@@ -4,9 +4,10 @@ namespace Katuusagi.CSharpScriptGenerator
 {
     public class ParameterData
     {
-        public string Type = string.Empty;
+        public ModifierType Modifier = ModifierType.None;
+        public ITypeNameData Type = null;
         public string Name = string.Empty;
         public List<AttributeData> Attributes = new List<AttributeData>();
-        public CodeData Default = null;
+        public IStatementData Default = null;
     }
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Katuusagi.CSharpScriptGenerator
 {
@@ -7,36 +8,47 @@ namespace Katuusagi.CSharpScriptGenerator
     {
         public List<MethodData> Result { get; private set; } = new List<MethodData>();
 
-        public void Generate(ModifierType modifier, string type, string name, Action<Children> scope)
+        public void Generate(ModifierType modifier, string returnType, string name, Action<Children> scope)
+        {
+            Generate(modifier, name, g =>
+            {
+                g.ReturnType.Generate(returnType);
+                scope?.Invoke(g);
+            });
+        }
+
+        public void Generate(ModifierType modifier, string name, Action<Children> scope)
         {
             var gen = new Children()
             {
+                ReturnType = new ReturnTypeGenerator(),
                 Attribute = new AttributeGenerator(),
                 GenericParam = new GenericParameterGenerator(),
                 Param = new ParameterGenerator(),
-                Code = new CodeGenerator(),
+                Statement = new StatementGenerator(),
             };
             scope?.Invoke(gen);
 
             var method = new MethodData()
             {
                 Modifier = modifier,
-                Type = type,
+                ReturnType = gen.ReturnType.Result.LastOrDefault(),
                 Name = name,
                 Attributes = gen.Attribute.Result,
                 GenericParams = gen.GenericParam.Result,
                 Params = gen.Param.Result,
-                Code = gen.Code.Result,
+                Statements = gen.Statement.Result,
             };
             Result.Add(method);
         }
 
         public struct Children
         {
+            public ReturnTypeGenerator ReturnType;
             public AttributeGenerator Attribute;
             public GenericParameterGenerator GenericParam;
             public ParameterGenerator Param;
-            public CodeGenerator Code;
+            public StatementGenerator Statement;
         }
     }
 }

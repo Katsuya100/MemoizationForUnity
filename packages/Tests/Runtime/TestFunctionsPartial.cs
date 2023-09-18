@@ -139,6 +139,12 @@ namespace Katuusagi.MemoizationForUnity.Tests
         }
 
         [Memoization]
+        public static int StaticParamsRaw(params int[] a9)
+        {
+            return default;
+        }
+
+        [Memoization]
         public static int StaticManyParameterRaw(int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, int a9)
         {
             return default;
@@ -148,6 +154,31 @@ namespace Katuusagi.MemoizationForUnity.Tests
         public static int StaticManyGenericParameterRaw<T1, T2, T3, T4, T5, T6, T7, T8, T9>(T1 a1, T2 a2, T3 a3, T4 a4, T5 a5, T6 a6, T7 a7, T8 a8, T9 a9)
         {
             return default;
+        }
+
+        [Memoization]
+        public static int StaticManyParameterAndParamsRaw(int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, params int[] a9)
+        {
+            return default;
+        }
+
+        [Memoization(CompareArrayElement = true)]
+        public static int StaticArrayElementRaw(int[] a1, int a2, int[] a3)
+        {
+            var result = 0;
+            foreach (var e in a1)
+            {
+                result += e;
+            }
+
+            result += a2;
+            foreach (var e in a3)
+            {
+                result += e;
+            }
+
+            ++_staticCounter;
+            return result + _staticCounter;
         }
 
         private int _instanceCounter = 0;
@@ -285,6 +316,12 @@ namespace Katuusagi.MemoizationForUnity.Tests
         }
 
         [Memoization]
+        public int InstanceParamsRaw(params int[] a9)
+        {
+            return default;
+        }
+
+        [Memoization]
         public int InstanceManyParameterRaw(int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, int a9)
         {
             return default;
@@ -294,6 +331,50 @@ namespace Katuusagi.MemoizationForUnity.Tests
         public int InstanceManyGenericParameterRaw<T1, T2, T3, T4, T5, T6, T7, T8, T9>(T1 a1, T2 a2, T3 a3, T4 a4, T5 a5, T6 a6, T7 a7, T8 a8, T9 a9)
         {
             return default;
+        }
+
+        [Memoization]
+        public int InstanceManyParameterAndParamsRaw(int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, params int[] a9)
+        {
+            return default;
+        }
+
+        [Memoization(CompareArrayElement = true)]
+        public int InstanceArrayElementRaw(int[] a1, int a2, int[] a3)
+        {
+            var result = 0;
+            foreach (var e in a1)
+            {
+                result += e;
+            }
+
+            result += a2;
+            foreach (var e in a3)
+            {
+                result += e;
+            }
+
+            ++_instanceCounter;
+            return result + _instanceCounter;
+        }
+
+        [Memoization(CompareArrayElement = true)]
+        public long InstanceArrayElementRaw(long[] a1, int a2, int[] a3)
+        {
+            long result = 0;
+            foreach (var e in a1)
+            {
+                result += e;
+            }
+
+            result += a2;
+            foreach (var e in a3)
+            {
+                result += e;
+            }
+
+            ++_instanceCounter;
+            return result + _instanceCounter;
         }
     }
 }

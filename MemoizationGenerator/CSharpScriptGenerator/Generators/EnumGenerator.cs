@@ -13,7 +13,6 @@ namespace Katuusagi.CSharpScriptGenerator
             {
                 PreProcess = new PreProcessEnumGenerator(),
                 Attribute = new AttributeGenerator(),
-                BaseType = new BaseTypeGenerator(),
                 EnumValue = new EnumValueGenerator(),
             };
             scope?.Invoke(gen);
@@ -24,7 +23,29 @@ namespace Katuusagi.CSharpScriptGenerator
                 Name = name,
                 PreProcesses = gen.PreProcess.Result,
                 Attributes = gen.Attribute.Result,
-                BaseTypes = gen.BaseType.Result,
+                BaseType = EnumBaseType.None,
+                EnumValues = gen.EnumValue.Result,
+            };
+            Result.Add(enu);
+        }
+
+        public void Generate(ModifierType modifier, string name, EnumBaseType enumBaseType, Action<Children> scope)
+        {
+            var gen = new Children()
+            {
+                PreProcess = new PreProcessEnumGenerator(),
+                Attribute = new AttributeGenerator(),
+                EnumValue = new EnumValueGenerator(),
+            };
+            scope?.Invoke(gen);
+
+            var enu = new EnumData()
+            {
+                Modifier = modifier,
+                Name = name,
+                PreProcesses = gen.PreProcess.Result,
+                Attributes = gen.Attribute.Result,
+                BaseType = enumBaseType,
                 EnumValues = gen.EnumValue.Result,
             };
             Result.Add(enu);
@@ -34,7 +55,6 @@ namespace Katuusagi.CSharpScriptGenerator
         {
             public PreProcessEnumGenerator PreProcess;
             public AttributeGenerator Attribute;
-            public BaseTypeGenerator BaseType;
             public EnumValueGenerator EnumValue;
         }
     }

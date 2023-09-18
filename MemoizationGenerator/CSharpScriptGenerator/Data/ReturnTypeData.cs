@@ -2,9 +2,9 @@ using System.Collections.Generic;
 
 namespace Katuusagi.CSharpScriptGenerator
 {
-    public class AttributeData
+    public class ReturnTypeData
     {
         public ITypeNameData Type = null;
-        public List<IStatementData> Args = new List<IStatementData>();
+        public List<AttributeData> Attributes = new List<AttributeData>();
     }
 }

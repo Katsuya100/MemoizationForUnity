@@ -4,9 +4,9 @@ using System.Linq;
 
 namespace Katuusagi.CSharpScriptGenerator
 {
-    public class AttributeGenerator
+    public class ReturnTypeGenerator
     {
-        public List<AttributeData> Result { get; private set; } = new List<AttributeData>();
+        public List<ReturnTypeData> Result { get; private set; } = new List<ReturnTypeData>();
 
         public void Generate(string type)
         {
@@ -21,22 +21,22 @@ namespace Katuusagi.CSharpScriptGenerator
             var gen = new Children()
             {
                 Type = new TypeNameGenerator(),
-                Arg = new StatementGenerator(),
+                Attribute = new AttributeGenerator(),
             };
             scope?.Invoke(gen);
 
-            var data = new AttributeData()
+            var type = new ReturnTypeData()
             {
                 Type = gen.Type.Result.LastOrDefault(),
-                Args = gen.Arg.Result,
+                Attributes = gen.Attribute.Result,
             };
-            Result.Add(data);
+            Result.Add(type);
         }
 
         public struct Children
         {
             public TypeNameGenerator Type;
-            public StatementGenerator Arg;
+            public AttributeGenerator Attribute;
         }
     }
 }

@@ -11,10 +11,10 @@ namespace Katuusagi.CSharpScriptGenerator
         {
             var gen = new Children()
             {
+                BaseType = new TypeNameGenerator(),
                 PreProcess = new PreProcessTypeGenerator(),
                 Attribute = new AttributeGenerator(),
                 GenericParam = new GenericParameterGenerator(),
-                BaseType = new BaseTypeGenerator(),
                 Event = new EventGenerator(),
                 Field = new FieldGenerator(),
                 Property = new PropertyGenerator(),
@@ -29,10 +29,10 @@ namespace Katuusagi.CSharpScriptGenerator
             {
                 Modifier = modifier,
                 Name = name,
+                BaseTypes = gen.BaseType.Result,
                 PreProcesses = gen.PreProcess.Result,
                 Attributes = gen.Attribute.Result,
                 GenericParams = gen.GenericParam.Result,
-                BaseTypes = gen.BaseType.Result,
                 Events = gen.Event.Result,
                 Fields = gen.Field.Result,
                 Properties = gen.Property.Result,
@@ -46,10 +46,10 @@ namespace Katuusagi.CSharpScriptGenerator
 
         public struct Children
         {
+            public TypeNameGenerator BaseType;
             public PreProcessTypeGenerator PreProcess;
             public AttributeGenerator Attribute;
             public GenericParameterGenerator GenericParam;
-            public BaseTypeGenerator BaseType;
             public EventGenerator Event;
             public FieldGenerator Field;
             public PropertyGenerator Property;

@@ -20,11 +20,11 @@ namespace Katuusagi.CSharpScriptGenerator
                     case "public":
                         result |= ModifierType.Public;
                         break;
-                    case "protected":
-                        result |= ModifierType.Protected;
-                        break;
                     case "private":
                         result |= ModifierType.Private;
+                        break;
+                    case "protected":
+                        result |= ModifierType.Protected;
                         break;
                     case "internal":
                         result |= ModifierType.Internal;
@@ -38,17 +38,14 @@ namespace Katuusagi.CSharpScriptGenerator
                     case "static":
                         result |= ModifierType.Static;
                         break;
-                    case "partial":
-                        result |= ModifierType.Partial;
-                        break;
-                    case "readonly":
-                        result |= ModifierType.ReadOnly;
-                        break;
-                    case "ref":
-                        result |= ModifierType.Ref;
-                        break;
                     case "const":
                         result |= ModifierType.Const;
+                        break;
+                    case "volatile":
+                        result |= ModifierType.Volatile;
+                        break;
+                    case "extern":
+                        result |= ModifierType.Extern;
                         break;
                     case "abstract":
                         result |= ModifierType.Abstract;
@@ -59,8 +56,39 @@ namespace Katuusagi.CSharpScriptGenerator
                     case "override":
                         result |= ModifierType.Override;
                         break;
+                    case "partial":
+                        result |= ModifierType.Partial;
+                        break;
+                    case "new":
+                        result |= ModifierType.New;
+                        break;
                     case "async":
                         result |= ModifierType.Async;
+                        break;
+                    case "readonly":
+                        if (result >= ModifierType.ReadOnly)
+                        {
+                            result |= ModifierType.ReturnReadOnly;
+                        }
+                        else
+                        {
+                            result |= ModifierType.ReadOnly;
+                        }
+                        break;
+                    case "this":
+                        result |= ModifierType.This;
+                        break;
+                    case "ref":
+                        result |= ModifierType.Ref;
+                        break;
+                    case "in":
+                        result |= ModifierType.In;
+                        break;
+                    case "out":
+                        result |= ModifierType.Out;
+                        break;
+                    case "params":
+                        result |= ModifierType.Params;
                         break;
                     case "record":
                         result |= ModifierType.Record;
@@ -122,27 +150,21 @@ namespace Katuusagi.CSharpScriptGenerator
                 result += "static ";
             }
 
-            if (modifier.HasFlag(ModifierType.Partial))
-            {
-                result += "partial ";
-            }
-
-            if (modifier.HasFlag(ModifierType.ReadOnly))
-            {
-                result += "readonly ";
-            }
-
-            if (modifier.HasFlag(ModifierType.Ref))
-            {
-                result += "ref ";
-            }
-
             if (modifier.HasFlag(ModifierType.Const))
             {
                 result += "const ";
             }
 
-            if (modifier.HasFlag(ModifierType.Abstract))
+            if (modifier.HasFlag(ModifierType.Volatile))
+            {
+                result += "volatile ";
+            }
+
+            if (modifier.HasFlag(ModifierType.Extern))
+            {
+                result += "extern ";
+            }
+            else if (modifier.HasFlag(ModifierType.Abstract))
             {
                 result += "abstract ";
             }
@@ -154,18 +176,59 @@ namespace Katuusagi.CSharpScriptGenerator
             {
                 result += "override ";
             }
+            else if (modifier.HasFlag(ModifierType.New))
+            {
+                result += "new ";
+            }
 
             if (modifier.HasFlag(ModifierType.Async))
             {
                 result += "async ";
             }
 
+            if (modifier.HasFlag(ModifierType.ReadOnly))
+            {
+                result += "readonly ";
+            }
+
+            if (modifier.HasFlag(ModifierType.This))
+            {
+                result += "this ";
+            }
+
+            if (modifier.HasFlag(ModifierType.Ref))
+            {
+                result += "ref ";
+            }
+            else if (modifier.HasFlag(ModifierType.In))
+            {
+                result += "in ";
+            }
+            else if (modifier.HasFlag(ModifierType.Out))
+            {
+                result += "out ";
+            }
+
+            if (modifier.HasFlag(ModifierType.Params))
+            {
+                result += "params ";
+            }
+
+            if (modifier.HasFlag(ModifierType.ReturnReadOnly))
+            {
+                result += "readonly ";
+            }
+
+            if (modifier.HasFlag(ModifierType.Partial))
+            {
+                result += "partial ";
+            }
+
             if (modifier.HasFlag(ModifierType.Record))
             {
                 result += "record ";
             }
-
-            if (modifier.HasFlag(ModifierType.Class))
+            else if (modifier.HasFlag(ModifierType.Class))
             {
                 result += "class ";
             }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Katuusagi.CSharpScriptGenerator
 {
@@ -9,39 +10,58 @@ namespace Katuusagi.CSharpScriptGenerator
 
         public void Generate(ModifierType modifier, string type, string name, string defaultValue)
         {
-            Generate(modifier, type, name, dg =>
+            Generate(modifier, name, g =>
             {
+                g.Type.Generate(type);
                 if (!string.IsNullOrEmpty(defaultValue))
                 {
-                    dg.Default.Generate(defaultValue);
+                    g.Default.Generate(defaultValue);
                 }
             });
         }
 
         public void Generate(ModifierType modifier, string type, string name, Action<Children> scope = null)
         {
+            Generate(modifier, name, g =>
+            {
+                g.Type.Generate(type);
+                scope?.Invoke(g);
+            });
+        }
+
+        public void Generate(ModifierType modifier, string name, Action<Children> scope = null)
+        {
             var gen = new Children()
             {
+                Type = new TypeNameGenerator(),
                 Attribute = new AttributeGenerator(),
-                Default = new CodeGenerator(),
+                Add = new PropertySetMethodGenerator(),
+                Remove = new PropertySetMethodGenerator(),
+                Default = new StatementGenerator(),
             };
             scope?.Invoke(gen);
 
-            var eve = new EventData()
+            var data = new EventData()
             {
                 Modifier = modifier,
-                Type = type,
+                Type = gen.Type.Result.LastOrDefault(),
                 Name = name,
+                Add = gen.Add.Result,
+                Remove = gen.Remove.Result,
                 Attributes = gen.Attribute.Result,
-                Default = gen.Default.Result,
+                Default = gen.Default.Result.LastOrDefault(),
             };
-            Result.Add(eve);
+
+            Result.Add(data);
         }
 
         public struct Children
         {
+            public TypeNameGenerator Type;
             public AttributeGenerator Attribute;
-            public CodeGenerator Default;
+            public PropertySetMethodGenerator Add;
+            public PropertySetMethodGenerator Remove;
+            public StatementGenerator Default;
         }
     }
 }

@@ -5,9 +5,9 @@ namespace Katuusagi.CSharpScriptGenerator
     public class FieldData
     {
         public ModifierType Modifier = ModifierType.None;
-        public string Type = string.Empty;
+        public ITypeNameData Type = null;
         public string Name = string.Empty;
-        public CodeData Default = null;
+        public IStatementData Default = null;
         public List<AttributeData> Attributes = null;
     }
 }

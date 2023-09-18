@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Katuusagi.CSharpScriptGenerator
 {
@@ -9,61 +10,63 @@ namespace Katuusagi.CSharpScriptGenerator
 
         public void Generate(ModifierType modifier, string type, string name, string defaultValue = "")
         {
-            Generate(modifier, type, name, pg =>
+            Generate(modifier, name, g =>
             {
-                pg.Get.Generate(ModifierType.None, null);
-                pg.Set.Generate(ModifierType.Private, null);
+                g.Type.Generate(type);
+                g.Get.Generate(ModifierType.None, null);
+                g.Set.Generate(ModifierType.Private, null);
                 if (!string.IsNullOrEmpty(defaultValue))
                 {
-                    pg.Default.Generate(defaultValue);
+                    g.Default.Generate(defaultValue);
                 }
             });
         }
 
-        public void Generate(ModifierType modifier, string type, string name, Action<Children> paramScope)
+        public void Generate(ModifierType modifier, string type, string name, Action<Children> scope)
+        {
+            Generate(modifier, name, g =>
+            {
+                g.Type.Generate(type);
+                scope?.Invoke(g);
+            });
+        }
+
+        public void Generate(ModifierType modifier, string name, Action<Children> scope)
         {
             var gen = new Children()
             {
+                Type = new TypeNameGenerator(),
                 Attribute = new AttributeGenerator(),
                 Param = new ParameterGenerator(),
-                Get = new PropertyMethodGenerator(),
-                Set = new PropertyMethodGenerator(),
-                Default = new CodeGenerator(),
+                Get = new PropertyGetMethodGenerator(),
+                Set = new PropertySetMethodGenerator(),
+                Default = new StatementGenerator(),
             };
-            paramScope?.Invoke(gen);
+            scope?.Invoke(gen);
 
             var property = new PropertyData()
             {
                 Modifier = modifier,
                 Name = name,
-                Type = type,
+                Type = gen.Type.Result.LastOrDefault(),
                 Attributes = gen.Attribute.Result,
                 Params = gen.Param.Result,
-                Default = gen.Default.Result,
+                Get = gen.Get.Result,
+                Set = gen.Set.Result,
+                Default = gen.Default.Result.LastOrDefault(),
             };
-
-            property.Get = gen.Get.Result;
-            if (property.Get != null)
-            {
-                property.Get.Name = "get";
-            }
-
-            property.Set = gen.Set.Result;
-            if (property.Set != null)
-            {
-                property.Set.Name = "set";
-            }
 
             Result.Add(property);
         }
 
         public struct Children
         {
+            public TypeNameGenerator Type;
             public AttributeGenerator Attribute;
             public ParameterGenerator Param;
-            public PropertyMethodGenerator Get;
-            public PropertyMethodGenerator Set;
-            public CodeGenerator Default;
+            public PropertyGetMethodGenerator Get;
+            public PropertySetMethodGenerator Set;
+            public StatementGenerator Default;
         }
     }
 }

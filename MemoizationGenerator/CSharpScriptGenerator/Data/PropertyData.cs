@@ -6,11 +6,11 @@ namespace Katuusagi.CSharpScriptGenerator
     {
         public ModifierType Modifier = ModifierType.None;
         public string Name = string.Empty;
-        public string Type = string.Empty;
+        public ITypeNameData Type = null;
         public List<AttributeData> Attributes = new List<AttributeData>();
         public List<ParameterData> Params = new List<ParameterData>();
         public PropertyMethodData Get = null;
         public PropertyMethodData Set = null;
-        public CodeData Default = null;
+        public IStatementData Default = null;
     }
 }

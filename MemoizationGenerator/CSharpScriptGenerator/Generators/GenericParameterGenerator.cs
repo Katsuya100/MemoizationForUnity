@@ -9,6 +9,11 @@ namespace Katuusagi.CSharpScriptGenerator
 
         public void Generate(string name, Action<Children> scope = null)
         {
+            Generate(ModifierType.None, name, scope);
+        }
+
+        public void Generate(ModifierType modifier, string name, Action<Children> scope = null)
+        {
             var gen = new Children()
             {
                 Where = new WhereGenerator(),
@@ -18,6 +23,7 @@ namespace Katuusagi.CSharpScriptGenerator
 
             var parameter = new GenericParameterData()
             {
+                Modifier = modifier,
                 Name = name,
                 Wheres = gen.Where.Result,
                 Attributes = gen.Attribute.Result,

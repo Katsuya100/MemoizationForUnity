@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Katuusagi.CSharpScriptGenerator
 {
@@ -23,7 +24,7 @@ namespace Katuusagi.CSharpScriptGenerator
             var gen = new Children()
             {
                 Attribute = new AttributeGenerator(),
-                Default = new CodeGenerator(),
+                Default = new StatementGenerator(),
             };
             scope?.Invoke(gen);
 
@@ -31,7 +32,7 @@ namespace Katuusagi.CSharpScriptGenerator
             {
                 Name = name,
                 Attributes = gen.Attribute.Result,
-                Default = gen.Default.Result,
+                Default = gen.Default.Result.LastOrDefault(),
             };
             Result.Add(enu);
         }
@@ -39,7 +40,7 @@ namespace Katuusagi.CSharpScriptGenerator
         public struct Children
         {
             public AttributeGenerator Attribute;
-            public CodeGenerator Default;
+            public StatementGenerator Default;
         }
     }
 }

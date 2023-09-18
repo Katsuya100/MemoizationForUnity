@@ -5,7 +5,7 @@ namespace Katuusagi.CSharpScriptGenerator
     public class EnumValueData
     {
         public string Name = string.Empty;
-        public CodeData Default = null;
+        public IStatementData Default = null;
         public List<AttributeData> Attributes = null;
     }
 }
