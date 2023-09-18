@@ -236,6 +236,16 @@ public static int Method(int arg0)
     return __result__;
 }
 ```
+### Keying Array Elements
+Usually when an array is passed as an argument, it is sometimes inconvenient because the reference is made part of the key.
+To treat array elements as keys, the following implementation is recommended.
+```.cs
+[Memoization(CompareArrayElement = true)]
+private static int MethodRaw(int arg0)
+{
+    :
+}
+```
 
 ### Advanced features
 #### Custom cache comparison process
