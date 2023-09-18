@@ -238,6 +238,16 @@ public static int Method(int arg0)
     return __result__;
 }
 ```
+### 配列要素を考慮するには
+通常配列が引数で渡される場合、参照をキーの一部としてしまうため都合の悪い場合がある。
+配列の要素をキーとして扱うには下記のように実装すると良い。
+```.cs
+[Memoization(CompareArrayElement = true)]
+private static int MethodRaw(int arg0)
+{
+    :
+}
+```
 
 ### 上級者向けの機能
 #### キャッシュ比較処理のカスタム
