@@ -199,15 +199,21 @@ public static int MethodFast(int arg0)
 
 ### Thread-safe support
 Memoization cache is basically not thread-safe.  
-Methods called from multiple threads should have the `Memoization` attribute's `IsThreadSafe` parameter set.  
+Functions called from multiple threads should have the `ThreadSafeType` parameter of the `Memoization` attribute set.  
 ```.cs
-[Memoization(IsThreadSafe = true)]
+[Memoization(ThreadSafeType = ThreadSafeType.Concurrent)]
 public static int MethodRaw(int arg0)
 {
     :
 }
 ```
-Setting the `IsThreadSafe` parameter makes the hash table in the cache area thread-safe.  
+Setting the `ThreadSafeType` parameter makes the hash table in the cache area thread-safe.  
+The process varies depending on the value you set.  
+
+| ThreadSafeType | Description |  
+|  ---- | ---- |  
+| Concurrent | Cache using ThreadSafe collection. |  
+| ThreadStatic | The ThreadStatic attribute is added to the cache.<br/>Different caches are used for each Thread. |
 
 ### Custom modifiers
 The default behavior of Memoization is to inherit the modifiers of the original method.  

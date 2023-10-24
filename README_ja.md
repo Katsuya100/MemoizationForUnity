@@ -201,15 +201,21 @@ public static int MethodFast(int arg0)
 
 ### スレッドセーフ対応
 Memoizationのキャッシュは基本的にはスレッドセーフではありません。  
-複数のスレッドから呼び出す関数には`Memoization`属性の`IsThreadSafe`パラメーターを設定します。  
+複数のスレッドから呼び出す関数には`Memoization`属性の`ThreadSafeType`パラメーターを設定します。  
 ```.cs
-[Memoization(IsThreadSafe = true)]
+[Memoization(ThreadSafeType = ThreadSafeType.Concurrent)]
 public static int MethodRaw(int arg0)
 {
     :
 }
 ```
-`IsThreadSafe`パラメーターを設定することでキャッシュ領域のハッシュテーブルがスレッドセーフ化されます。  
+`ThreadSafeType`パラメーターを設定することでキャッシュ領域のハッシュテーブルがスレッドセーフ化されます。  
+設定する値によって処理が異なります。  
+
+| ThreadSafeType | 説明 |  
+|  ---- | ---- |  
+| Concurrent | ThreadSafeなコレクションを用いてキャッシュする。 |  
+| ThreadStatic | キャッシュにThreadStatic属性が付与される。<br/>Thread毎に異なるキャッシュが使用される。 |
 
 ### 修飾子のカスタム
 Memoizationのデフォルト挙動では元のメソッドの修飾子を引き継ぎます。  
