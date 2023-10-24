@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -72,6 +73,50 @@ namespace Katuusagi.MemoizationForUnity.Tests
         }
 
         [Memoization]
+        public static int GetAndOutRaw(out int y)
+        {
+            y = 10;
+            return 20;
+        }
+
+        [Memoization]
+        public static int GetAndOutRaw<T>(out int y)
+        {
+            y = 10;
+            return 20;
+        }
+
+        [Memoization]
+        public static void OutOnlyRaw(out int y)
+        {
+            y = 10;
+        }
+
+        [Memoization]
+        public static void OutOnlyRaw<T>(out int y)
+        {
+            y = 10;
+        }
+
+        [Memoization(IsClearable = true)]
+        public static void OutOnlyClearableRaw(out int y)
+        {
+            y = 10;
+        }
+
+        [Memoization(IsClearable = true)]
+        public static void OutOnlyClearableRaw<T>(out int y)
+        {
+            y = 10;
+        }
+
+        [Memoization]
+        public static bool ThrewRaw(bool key)
+        {
+            return key;
+        }
+
+        [Memoization]
         public static int GetLengthRaw(string str)
         {
             return str?.Length ?? 0;
@@ -83,20 +128,38 @@ namespace Katuusagi.MemoizationForUnity.Tests
             return ps?.Length ?? 0;
         }
 
+        [Memoization(CompareArrayElement = true)]
+        public static int GetSumRaw(int[] values)
+        {
+            return values.Sum();
+        }
+
         [Memoization]
         public static int TableGetValueRaw(Dictionary<string, int> table, params byte[] ps)
         {
             return table[Encoding.UTF8.GetString(ps)];
         }
 
-        [Memoization(IsThreadSafe = true)]
+        [Memoization(ThreadSafeType = ThreadSafeType.Concurrent)]
         public static float GetLengthRaw(in Vector3 value)
         {
             return value.magnitude;
         }
 
-        [Memoization(IsThreadSafe = true, IsClearable = true)]
+        [Memoization(ThreadSafeType = ThreadSafeType.Concurrent, IsClearable = true)]
         public static string GetTypeFullNameRaw<T>()
+        {
+            return typeof(T).FullName;
+        }
+
+        [Memoization(ThreadSafeType = ThreadSafeType.ThreadStatic)]
+        public static float GetLengthThreadStaticRaw(in Vector3 value)
+        {
+            return value.magnitude;
+        }
+
+        [Memoization(ThreadSafeType = ThreadSafeType.ThreadStatic)]
+        public static string GetTypeFullNameThreadStaticRaw<T>()
         {
             return typeof(T).FullName;
         }

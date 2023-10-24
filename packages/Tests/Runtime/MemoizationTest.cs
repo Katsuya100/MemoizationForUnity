@@ -448,6 +448,24 @@ namespace Katuusagi.MemoizationForUnity.Tests
             dic.Remove(10);
             TestFunctions.TableGetValue(dic, 10, out var rValue);
             Assert.AreEqual(lValue, rValue);
+
+            TestFunctions.OutOnly(out var value);
+            Assert.AreEqual(value, 10);
+            TestFunctions.OutOnly<int>(out value);
+            Assert.AreEqual(value, 10);
+
+
+            TestFunctions.OutOnlyClearable(out value);
+            Assert.AreEqual(value, 10);
+            TestFunctions.OutOnlyClearable<int>(out value);
+            Assert.AreEqual(value, 10);
+
+            var ret = TestFunctions.GetAndOut(out value);
+            Assert.AreEqual(value, 10);
+            Assert.AreEqual(ret, 20);
+            ret = TestFunctions.GetAndOut<int>(out value);
+            Assert.AreEqual(value, 10);
+            Assert.AreEqual(ret, 20);
         }
 
         [Test]
@@ -456,6 +474,15 @@ namespace Katuusagi.MemoizationForUnity.Tests
             var lLength = TestFunctions.GetLength(null);
             var rLength = TestFunctions.GetLength(null);
             Assert.AreEqual(lLength, rLength);
+        }
+
+        [Test]
+        public void BoolKey()
+        {
+            var v = TestFunctions.Threw(true);
+            Assert.AreEqual(v, true);
+            v = TestFunctions.Threw(false);
+            Assert.AreEqual(v, false);
         }
 
         [Test]
@@ -493,6 +520,23 @@ namespace Katuusagi.MemoizationForUnity.Tests
                 if (i % 2 == 0)
                 {
                     TestFunctions.GetTypeFullName<int>();
+                }
+                else
+                {
+                    TestFunctions.ClearStaticMemoizationCache();
+                }
+            });
+
+            while (!result.IsCompleted)
+            {
+                wait.SpinOnce();
+            }
+
+            result = Parallel.For(0, 10000, (i) =>
+            {
+                if (i % 2 == 0)
+                {
+                    TestFunctions.GetTypeFullNameThreadStatic<int>();
                 }
                 else
                 {

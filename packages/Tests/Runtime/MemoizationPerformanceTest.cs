@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using System.Collections.Generic;
 using System.Reflection;
 using Unity.PerformanceTesting;
 
@@ -83,6 +84,40 @@ namespace Katuusagi.MemoizationForUnity.Tests
             Measure.Method(() =>
             {
                 TestFunctions.GetMethodInfoRaw(typeof(TestFunctions), "Dummy", BindingFlags.NonPublic | BindingFlags.Instance);
+            })
+            .WarmupCount(1)
+            .IterationsPerMeasurement(10000)
+            .MeasurementCount(20)
+            .Run();
+        }
+
+        [Test]
+        [Performance]
+        public void TryGetValue_BooleanCacheValue()
+        {
+            var table = new BooleanCacheValue<int>();
+            table.Add(true, 1);
+            table.Add(false, 0);
+            Measure.Method(() =>
+            {
+                table.TryGetValue(true, out _);
+            })
+            .WarmupCount(1)
+            .IterationsPerMeasurement(10000)
+            .MeasurementCount(20)
+            .Run();
+        }
+
+        [Test]
+        [Performance]
+        public void TryGetValue_BooleanDictionary()
+        {
+            var table = new Dictionary<bool, int>(2);
+            table.Add(true, 1);
+            table.Add(false, 0);
+            Measure.Method(() =>
+            {
+                table.TryGetValue(true, out _);
             })
             .WarmupCount(1)
             .IterationsPerMeasurement(10000)

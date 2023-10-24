@@ -5,7 +5,7 @@ namespace Katuusagi.MemoizationForUnity
 {
     public sealed class MemoizationEqualityComparer<T1> : IEqualityComparer<ValueTuple<T1>>
     {
-        public static MemoizationEqualityComparer<T1> Default { get; } = new ();
+        public static readonly MemoizationEqualityComparer<T1> Default= new ();
         bool IEqualityComparer<ValueTuple<T1>>.Equals(ValueTuple<T1> x, ValueTuple<T1> y)
         {
             return x.Equals(y);
@@ -19,7 +19,7 @@ namespace Katuusagi.MemoizationForUnity
 
     public sealed class MemoizationEqualityComparer<T1, T2> : IEqualityComparer<(T1, T2)>
     {
-        public static MemoizationEqualityComparer<T1, T2> Default { get; } = new ();
+        public static readonly MemoizationEqualityComparer<T1, T2> Default= new ();
         bool IEqualityComparer<(T1, T2)>.Equals((T1, T2) x, (T1, T2) y)
         {
             return x.Equals(y);
@@ -33,7 +33,7 @@ namespace Katuusagi.MemoizationForUnity
 
     public sealed class MemoizationEqualityComparer<T1, T2, T3> : IEqualityComparer<(T1, T2, T3)>
     {
-        public static MemoizationEqualityComparer<T1, T2, T3> Default { get; } = new ();
+        public static readonly MemoizationEqualityComparer<T1, T2, T3> Default= new ();
         bool IEqualityComparer<(T1, T2, T3)>.Equals((T1, T2, T3) x, (T1, T2, T3) y)
         {
             return x.Equals(y);
@@ -47,7 +47,7 @@ namespace Katuusagi.MemoizationForUnity
 
     public sealed class MemoizationEqualityComparer<T1, T2, T3, T4> : IEqualityComparer<(T1, T2, T3, T4)>
     {
-        public static MemoizationEqualityComparer<T1, T2, T3, T4> Default { get; } = new ();
+        public static readonly MemoizationEqualityComparer<T1, T2, T3, T4> Default= new ();
         bool IEqualityComparer<(T1, T2, T3, T4)>.Equals((T1, T2, T3, T4) x, (T1, T2, T3, T4) y)
         {
             return x.Equals(y);
@@ -61,7 +61,7 @@ namespace Katuusagi.MemoizationForUnity
 
     public sealed class MemoizationEqualityComparer<T1, T2, T3, T4, T5> : IEqualityComparer<(T1, T2, T3, T4, T5)>
     {
-        public static MemoizationEqualityComparer<T1, T2, T3, T4, T5> Default { get; } = new ();
+        public static readonly MemoizationEqualityComparer<T1, T2, T3, T4, T5> Default= new ();
         bool IEqualityComparer<(T1, T2, T3, T4, T5)>.Equals((T1, T2, T3, T4, T5) x, (T1, T2, T3, T4, T5) y)
         {
             return x.Equals(y);
@@ -75,7 +75,7 @@ namespace Katuusagi.MemoizationForUnity
 
     public sealed class MemoizationEqualityComparer<T1, T2, T3, T4, T5, T6> : IEqualityComparer<(T1, T2, T3, T4, T5, T6)>
     {
-        public static MemoizationEqualityComparer<T1, T2, T3, T4, T5, T6> Default { get; } = new ();
+        public static readonly MemoizationEqualityComparer<T1, T2, T3, T4, T5, T6> Default= new ();
         bool IEqualityComparer<(T1, T2, T3, T4, T5, T6)>.Equals((T1, T2, T3, T4, T5, T6) x, (T1, T2, T3, T4, T5, T6) y)
         {
             return x.Equals(y);
@@ -89,7 +89,7 @@ namespace Katuusagi.MemoizationForUnity
 
     public sealed class MemoizationEqualityComparer<T1, T2, T3, T4, T5, T6, T7> : IEqualityComparer<(T1, T2, T3, T4, T5, T6, T7)>
     {
-        public static MemoizationEqualityComparer<T1, T2, T3, T4, T5, T6, T7> Default { get; } = new ();
+        public static readonly MemoizationEqualityComparer<T1, T2, T3, T4, T5, T6, T7> Default= new ();
         bool IEqualityComparer<(T1, T2, T3, T4, T5, T6, T7)>.Equals((T1, T2, T3, T4, T5, T6, T7) x, (T1, T2, T3, T4, T5, T6, T7) y)
         {
             return x.Equals(y);
@@ -103,7 +103,7 @@ namespace Katuusagi.MemoizationForUnity
 
     public sealed class MemoizationEqualityComparer<T1, T2, T3, T4, T5, T6, T7, T8> : IEqualityComparer<(T1, T2, T3, T4, T5, T6, T7, T8)>
     {
-        public static MemoizationEqualityComparer<T1, T2, T3, T4, T5, T6, T7, T8> Default { get; } = new ();
+        public static readonly MemoizationEqualityComparer<T1, T2, T3, T4, T5, T6, T7, T8> Default= new ();
         bool IEqualityComparer<(T1, T2, T3, T4, T5, T6, T7, T8)>.Equals((T1, T2, T3, T4, T5, T6, T7, T8) x, (T1, T2, T3, T4, T5, T6, T7, T8) y)
         {
             return x.Equals(y);
