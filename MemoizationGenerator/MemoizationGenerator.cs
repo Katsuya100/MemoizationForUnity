@@ -1,5 +1,5 @@
 ﻿using Katuusagi.CSharpScriptGenerator;
-using Katuusagi.MemoizationForUnity.SourceGenerator.Utils;
+using Katuusagi.SourceGeneratorCommon;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -1121,280 +1121,278 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
 
         public void Execute(GeneratorExecutionContext context)
         {
-            using (ContextUtils.LogScope(context))
+            ContextUtils.InitLog<MemoizationGenerator>(context);
+            try
             {
-                try
+                var rootInfo = CreateMemoizationRootInfo(context);
+                foreach (var typeInfo in rootInfo.TypeInfos)
                 {
-                    var rootInfo = CreateMemoizationRootInfo(context);
-                    foreach (var typeInfo in rootInfo.TypeInfos)
+                    var root = new RootGenerator();
+                    root.Generate(rg =>
                     {
-                        var root = new RootGenerator();
-                        root.Generate(rg =>
+                        foreach (var @using in typeInfo.Usings)
                         {
-                            foreach (var @using in typeInfo.Usings)
-                            {
-                                rg.Using.Generate(@using);
-                            }
+                            rg.Using.Generate(@using);
+                        }
 
-                            if (string.IsNullOrEmpty(typeInfo.NameSpace))
-                            {
-                                GenerateAncestor(rg.Type, typeInfo, typeInfo.Ancestors);
-                                return;
-                            }
+                        if (string.IsNullOrEmpty(typeInfo.NameSpace))
+                        {
+                            GenerateAncestor(rg.Type, typeInfo, typeInfo.Ancestors);
+                            return;
+                        }
 
-                            rg.Namespace.Generate(typeInfo.NameSpace, ng =>
-                            {
-                                GenerateAncestor(ng.Type, typeInfo, typeInfo.Ancestors);
-                            });
+                        rg.Namespace.Generate(typeInfo.NameSpace, ng =>
+                        {
+                            GenerateAncestor(ng.Type, typeInfo, typeInfo.Ancestors);
                         });
-                        var builder = new CSharpScriptBuilder();
-                        builder.BuildAndNewLine(root.Result);
-                        context.AddSource($"{typeInfo.FileName}.cs", SourceText.From(builder.ToString(), Encoding.UTF8));
-                    }
+                    });
+                    var builder = new CSharpScriptBuilder();
+                    builder.BuildAndNewLine(root.Result);
+                    context.AddSource($"{typeInfo.FileName}.cs", SourceText.From(builder.ToString(), Encoding.UTF8));
+                }
 
-                    if (!rootInfo.AdditionalDefaultComparers.Any() &&
-                        !rootInfo.AdditionalParamsComparers.Any() &&
-                        !rootInfo.ArrayElementComparers.Any())
+                if (!rootInfo.AdditionalDefaultComparers.Any() &&
+                    !rootInfo.AdditionalParamsComparers.Any() &&
+                    !rootInfo.ArrayElementComparers.Any())
+                {
+                    return;
+                }
+
+                var comparerRoot = new RootGenerator();
+                comparerRoot.Generate(rg =>
+                {
+                    rg.Using.Generate("System");
+                    rg.Using.Generate("System.Collections.Generic");
+                    rg.Using.Generate("System.Linq");
+
+                    rg.Namespace.Generate("Katuusagi.MemoizationForUnity", ng =>
                     {
-                        return;
-                    }
-
-                    var comparerRoot = new RootGenerator();
-                    comparerRoot.Generate(rg =>
-                    {
-                        rg.Using.Generate("System");
-                        rg.Using.Generate("System.Collections.Generic");
-                        rg.Using.Generate("System.Linq");
-
-                        rg.Namespace.Generate("Katuusagi.MemoizationForUnity", ng =>
+                        foreach (var count in rootInfo.AdditionalDefaultComparers)
                         {
-                            foreach (var count in rootInfo.AdditionalDefaultComparers)
+                            string gen = string.Empty;
+                            for (int i = 1; i <= count; ++i)
                             {
-                                string gen = string.Empty;
-                                for (int i = 1; i <= count; ++i)
-                                {
-                                    gen += $"T{i}, ";
-                                }
-
-                                if (!string.IsNullOrEmpty(gen))
-                                {
-                                    gen = gen.Remove(gen.Length - 2, 2);
-                                }
-
-                                ng.Type.Generate(ModifierType.Internal | ModifierType.Sealed | ModifierType.Class, "MemoizationEqualityComparer", tg =>
-                                {
-                                    for (int i = 1; i <= count; ++i)
-                                    {
-                                        tg.GenericParam.Generate($"T{i}");
-                                    }
-
-                                    tg.BaseType.Generate($"IEqualityComparer<({gen})>");
-                                    tg.Field.Generate(ModifierType.Static | ModifierType.ReadOnly | ModifierType.Public, $"MemoizationEqualityComparer<{gen}>", "Default", "new ()");
-                                    tg.Method.Generate(ModifierType.None, "bool", $"IEqualityComparer<({gen})>.Equals", mg =>
-                                    {
-                                        mg.Param.Generate($"({gen})", "x");
-                                        mg.Param.Generate($"({gen})", "y");
-
-                                        mg.Statement.Generate($"return x.Equals(y);");
-                                    });
-
-                                    tg.Method.Generate(ModifierType.None, "int", $"IEqualityComparer<({gen})>.GetHashCode", mg =>
-                                    {
-                                        mg.Param.Generate($"({gen})", "obj");
-
-                                        mg.Statement.Generate($"var hash = new HashCode();");
-                                        for (int i = 1; i <= count; ++i)
-                                        {
-                                            mg.Statement.Generate($"hash.Add(obj.Item{i});");
-                                        }
-
-                                        mg.Statement.Generate("return hash.ToHashCode();");
-                                    });
-                                });
+                                gen += $"T{i}, ";
                             }
 
-                            foreach (var count in rootInfo.AdditionalParamsComparers)
+                            if (!string.IsNullOrEmpty(gen))
                             {
-                                string gen = string.Empty;
-                                for (int i = 1; i <= count; ++i)
-                                {
-                                    gen += $"T{i}, ";
-                                }
-
-                                if (!string.IsNullOrEmpty(gen))
-                                {
-                                    gen = gen.Remove(gen.Length - 2, 2);
-                                }
-
-                                ng.Type.Generate(ModifierType.Internal | ModifierType.Sealed | ModifierType.Class, "ParamsEqualityComparer", tg =>
-                                {
-                                    for (int i = 1; i <= count; ++i)
-                                    {
-                                        tg.GenericParam.Generate($"T{i}");
-                                    }
-
-                                    tg.BaseType.Generate($"IEqualityComparer<({gen}[])>");
-                                    tg.Field.Generate(ModifierType.Static | ModifierType.ReadOnly | ModifierType.Public, $"ParamsEqualityComparer<{gen}>", "Default", "new ()");
-                                    tg.Method.Generate(ModifierType.None, "bool", $"IEqualityComparer<({gen}[])>.Equals", mg =>
-                                    {
-                                        mg.Param.Generate($"({gen}[])", "x");
-                                        mg.Param.Generate($"({gen}[])", "y");
-
-                                        mg.Statement.Generate($"return EqualityComparer<T1>.Default.Equals(x.Item1, y.Item1) &&");
-                                        for (int i = 2; i < count; ++i)
-                                        {
-                                            mg.Statement.Generate($"       EqualityComparer<T{i}>.Default.Equals(x.Item{i}, y.Item{i}) &&");
-                                        }
-                                        mg.Statement.Generate($"       (x.Item{count} ?? Array.Empty<T{count}>()).SequenceEqual(y.Item{count} ?? Array.Empty<T{count}>());");
-                                    });
-
-                                    tg.Method.Generate(ModifierType.None, "int", $"IEqualityComparer<({gen}[])>.GetHashCode", mg =>
-                                    {
-                                        mg.Param.Generate($"({gen}[])", "obj");
-
-                                        mg.Statement.Generate($"var hash = new HashCode();");
-                                        for (int i = 1; i < count; ++i)
-                                        {
-                                            mg.Statement.Generate($"hash.Add(obj.Item{i});");
-                                        }
-
-                                        mg.Statement.Generate($"foreach (var elem in obj.Item{count} ?? Array.Empty<T{count}>())", () =>
-                                        {
-                                            mg.Statement.Generate("hash.Add(elem);");
-                                        });
-
-                                        mg.Statement.Generate("return hash.ToHashCode();");
-                                    });
-                                });
+                                gen = gen.Remove(gen.Length - 2, 2);
                             }
 
-
-                            foreach (var flags in rootInfo.ArrayElementComparers)
+                            ng.Type.Generate(ModifierType.Internal | ModifierType.Sealed | ModifierType.Class, "MemoizationEqualityComparer", tg =>
                             {
-                                var count = flags.Length;
-
-                                string parameterArrayFlag = string.Empty;
-                                string gen = string.Empty;
-                                string arrayGen = string.Empty;
                                 for (int i = 1; i <= count; ++i)
                                 {
-                                    gen += $"T{i}, ";
-                                    var isArray = flags[i - 1];
+                                    tg.GenericParam.Generate($"T{i}");
+                                }
+
+                                tg.BaseType.Generate($"IEqualityComparer<({gen})>");
+                                tg.Field.Generate(ModifierType.Static | ModifierType.ReadOnly | ModifierType.Public, $"MemoizationEqualityComparer<{gen}>", "Default", "new ()");
+                                tg.Method.Generate(ModifierType.None, "bool", $"IEqualityComparer<({gen})>.Equals", mg =>
+                                {
+                                    mg.Param.Generate($"({gen})", "x");
+                                    mg.Param.Generate($"({gen})", "y");
+
+                                    mg.Statement.Generate($"return x.Equals(y);");
+                                });
+
+                                tg.Method.Generate(ModifierType.None, "int", $"IEqualityComparer<({gen})>.GetHashCode", mg =>
+                                {
+                                    mg.Param.Generate($"({gen})", "obj");
+
+                                    mg.Statement.Generate($"var hash = new HashCode();");
+                                    for (int i = 1; i <= count; ++i)
+                                    {
+                                        mg.Statement.Generate($"hash.Add(obj.Item{i});");
+                                    }
+
+                                    mg.Statement.Generate("return hash.ToHashCode();");
+                                });
+                            });
+                        }
+
+                        foreach (var count in rootInfo.AdditionalParamsComparers)
+                        {
+                            string gen = string.Empty;
+                            for (int i = 1; i <= count; ++i)
+                            {
+                                gen += $"T{i}, ";
+                            }
+
+                            if (!string.IsNullOrEmpty(gen))
+                            {
+                                gen = gen.Remove(gen.Length - 2, 2);
+                            }
+
+                            ng.Type.Generate(ModifierType.Internal | ModifierType.Sealed | ModifierType.Class, "ParamsEqualityComparer", tg =>
+                            {
+                                for (int i = 1; i <= count; ++i)
+                                {
+                                    tg.GenericParam.Generate($"T{i}");
+                                }
+
+                                tg.BaseType.Generate($"IEqualityComparer<({gen}[])>");
+                                tg.Field.Generate(ModifierType.Static | ModifierType.ReadOnly | ModifierType.Public, $"ParamsEqualityComparer<{gen}>", "Default", "new ()");
+                                tg.Method.Generate(ModifierType.None, "bool", $"IEqualityComparer<({gen}[])>.Equals", mg =>
+                                {
+                                    mg.Param.Generate($"({gen}[])", "x");
+                                    mg.Param.Generate($"({gen}[])", "y");
+
+                                    mg.Statement.Generate($"return EqualityComparer<T1>.Default.Equals(x.Item1, y.Item1) &&");
+                                    for (int i = 2; i < count; ++i)
+                                    {
+                                        mg.Statement.Generate($"       EqualityComparer<T{i}>.Default.Equals(x.Item{i}, y.Item{i}) &&");
+                                    }
+                                    mg.Statement.Generate($"       (x.Item{count} ?? Array.Empty<T{count}>()).SequenceEqual(y.Item{count} ?? Array.Empty<T{count}>());");
+                                });
+
+                                tg.Method.Generate(ModifierType.None, "int", $"IEqualityComparer<({gen}[])>.GetHashCode", mg =>
+                                {
+                                    mg.Param.Generate($"({gen}[])", "obj");
+
+                                    mg.Statement.Generate($"var hash = new HashCode();");
+                                    for (int i = 1; i < count; ++i)
+                                    {
+                                        mg.Statement.Generate($"hash.Add(obj.Item{i});");
+                                    }
+
+                                    mg.Statement.Generate($"foreach (var elem in obj.Item{count} ?? Array.Empty<T{count}>())", () =>
+                                    {
+                                        mg.Statement.Generate("hash.Add(elem);");
+                                    });
+
+                                    mg.Statement.Generate("return hash.ToHashCode();");
+                                });
+                            });
+                        }
+
+
+                        foreach (var flags in rootInfo.ArrayElementComparers)
+                        {
+                            var count = flags.Length;
+
+                            string parameterArrayFlag = string.Empty;
+                            string gen = string.Empty;
+                            string arrayGen = string.Empty;
+                            for (int i = 1; i <= count; ++i)
+                            {
+                                gen += $"T{i}, ";
+                                var isArray = flags[i - 1];
+                                if (isArray)
+                                {
+                                    arrayGen += $"T{i}[], ";
+                                    parameterArrayFlag += "1";
+                                }
+                                else
+                                {
+                                    arrayGen += $"T{i}, ";
+                                    parameterArrayFlag += "0";
+                                }
+                            }
+
+                            if (!string.IsNullOrEmpty(gen))
+                            {
+                                gen = gen.Remove(gen.Length - 2, 2);
+                                arrayGen = arrayGen.Remove(arrayGen.Length - 2, 2);
+                            }
+
+                            ng.Type.Generate(ModifierType.Internal | ModifierType.Sealed | ModifierType.Class, $"ArrayElementEqualityComparer{parameterArrayFlag}", tg =>
+                            {
+                                for (int i = 1; i <= count; ++i)
+                                {
+                                    tg.GenericParam.Generate($"T{i}");
+                                }
+
+                                tg.BaseType.Generate($"IEqualityComparer<({arrayGen})>");
+                                tg.Field.Generate(ModifierType.Static | ModifierType.ReadOnly | ModifierType.Public, $"ArrayElementEqualityComparer{parameterArrayFlag}<{gen}>", "Default", "new ()");
+                                tg.Method.Generate(ModifierType.None, "bool", $"IEqualityComparer<({arrayGen})>.Equals", mg =>
+                                {
+                                    mg.Param.Generate($"({arrayGen})", "x");
+                                    mg.Param.Generate($"({arrayGen})", "y");
+
+                                    var isArray = flags[0];
+                                    if (count == 1)
+                                    {
+                                        if (isArray)
+                                        {
+                                            mg.Statement.Generate($"return (x.Item1 ?? Array.Empty<T1>()).SequenceEqual(y.Item1 ?? Array.Empty<T1>());");
+                                        }
+                                        else
+                                        {
+                                            mg.Statement.Generate($"return EqualityComparer<T1>.Default.Equals(x.Item1, y.Item1);");
+                                        }
+                                        return;
+                                    }
+
                                     if (isArray)
                                     {
-                                        arrayGen += $"T{i}[], ";
-                                        parameterArrayFlag += "1";
+                                        mg.Statement.Generate($"return (x.Item1 ?? Array.Empty<T1>()).SequenceEqual(y.Item1 ?? Array.Empty<T1>()) &&");
                                     }
                                     else
                                     {
-                                        arrayGen += $"T{i}, ";
-                                        parameterArrayFlag += "0";
+                                        mg.Statement.Generate($"return EqualityComparer<T1>.Default.Equals(x.Item1, y.Item1) &&");
                                     }
-                                }
 
-                                if (!string.IsNullOrEmpty(gen))
-                                {
-                                    gen = gen.Remove(gen.Length - 2, 2);
-                                    arrayGen = arrayGen.Remove(arrayGen.Length - 2, 2);
-                                }
+                                    for (int i = 2; i < count; ++i)
+                                    {
+                                        isArray = flags[i - 1];
+                                        if (isArray)
+                                        {
+                                            mg.Statement.Generate($"       (x.Item{i} ?? Array.Empty<T{i}>()).SequenceEqual(y.Item{i} ?? Array.Empty<T{i}>()) &&");
+                                        }
+                                        else
+                                        {
+                                            mg.Statement.Generate($"       EqualityComparer<T{i}>.Default.Equals(x.Item{i}, y.Item{i}) &&");
+                                        }
+                                    }
 
-                                ng.Type.Generate(ModifierType.Internal | ModifierType.Sealed | ModifierType.Class, $"ArrayElementEqualityComparer{parameterArrayFlag}", tg =>
+                                    isArray = flags[count - 1];
+                                    if (isArray)
+                                    {
+                                        mg.Statement.Generate($"       (x.Item{count} ?? Array.Empty<T{count}>()).SequenceEqual(y.Item{count} ?? Array.Empty<T{count}>());");
+                                    }
+                                    else
+                                    {
+                                        mg.Statement.Generate($"       EqualityComparer<T{count}>.Default.Equals(x.Item{count}, y.Item{count});");
+                                    }
+                                });
+
+                                tg.Method.Generate(ModifierType.None, "int", $"IEqualityComparer<({arrayGen})>.GetHashCode", mg =>
                                 {
+                                    mg.Param.Generate($"({arrayGen})", "obj");
+
+                                    mg.Statement.Generate($"var hash = new HashCode();");
                                     for (int i = 1; i <= count; ++i)
                                     {
-                                        tg.GenericParam.Generate($"T{i}");
+                                        var isArray = flags[i - 1];
+                                        if (isArray)
+                                        {
+                                            mg.Statement.Generate($"foreach (var elem in obj.Item{i} ?? Array.Empty<T{i}>())", () =>
+                                            {
+                                                mg.Statement.Generate("hash.Add(elem);");
+                                            });
+                                        }
+                                        else
+                                        {
+                                            mg.Statement.Generate($"hash.Add(obj.Item{i});");
+                                        }
                                     }
 
-                                    tg.BaseType.Generate($"IEqualityComparer<({arrayGen})>");
-                                    tg.Field.Generate(ModifierType.Static | ModifierType.ReadOnly | ModifierType.Public, $"ArrayElementEqualityComparer{parameterArrayFlag}<{gen}>", "Default", "new ()");
-                                    tg.Method.Generate(ModifierType.None, "bool", $"IEqualityComparer<({arrayGen})>.Equals", mg =>
-                                    {
-                                        mg.Param.Generate($"({arrayGen})", "x");
-                                        mg.Param.Generate($"({arrayGen})", "y");
-
-                                        var isArray = flags[0];
-                                        if (count == 1)
-                                        {
-                                            if (isArray)
-                                            {
-                                                mg.Statement.Generate($"return (x.Item1 ?? Array.Empty<T1>()).SequenceEqual(y.Item1 ?? Array.Empty<T1>());");
-                                            }
-                                            else
-                                            {
-                                                mg.Statement.Generate($"return EqualityComparer<T1>.Default.Equals(x.Item1, y.Item1);");
-                                            }
-                                            return;
-                                        }
-
-                                        if (isArray)
-                                        {
-                                            mg.Statement.Generate($"return (x.Item1 ?? Array.Empty<T1>()).SequenceEqual(y.Item1 ?? Array.Empty<T1>()) &&");
-                                        }
-                                        else
-                                        {
-                                            mg.Statement.Generate($"return EqualityComparer<T1>.Default.Equals(x.Item1, y.Item1) &&");
-                                        }
-
-                                        for (int i = 2; i < count; ++i)
-                                        {
-                                            isArray = flags[i - 1];
-                                            if (isArray)
-                                            {
-                                                mg.Statement.Generate($"       (x.Item{i} ?? Array.Empty<T{i}>()).SequenceEqual(y.Item{i} ?? Array.Empty<T{i}>()) &&");
-                                            }
-                                            else
-                                            {
-                                                mg.Statement.Generate($"       EqualityComparer<T{i}>.Default.Equals(x.Item{i}, y.Item{i}) &&");
-                                            }
-                                        }
-
-                                        isArray = flags[count - 1];
-                                        if (isArray)
-                                        {
-                                            mg.Statement.Generate($"       (x.Item{count} ?? Array.Empty<T{count}>()).SequenceEqual(y.Item{count} ?? Array.Empty<T{count}>());");
-                                        }
-                                        else
-                                        {
-                                            mg.Statement.Generate($"       EqualityComparer<T{count}>.Default.Equals(x.Item{count}, y.Item{count});");
-                                        }
-                                    });
-
-                                    tg.Method.Generate(ModifierType.None, "int", $"IEqualityComparer<({arrayGen})>.GetHashCode", mg =>
-                                    {
-                                        mg.Param.Generate($"({arrayGen})", "obj");
-
-                                        mg.Statement.Generate($"var hash = new HashCode();");
-                                        for (int i = 1; i <= count; ++i)
-                                        {
-                                            var isArray = flags[i - 1];
-                                            if (isArray)
-                                            {
-                                                mg.Statement.Generate($"foreach (var elem in obj.Item{i} ?? Array.Empty<T{i}>())", () =>
-                                                {
-                                                    mg.Statement.Generate("hash.Add(elem);");
-                                                });
-                                            }
-                                            else
-                                            {
-                                                mg.Statement.Generate($"hash.Add(obj.Item{i});");
-                                            }
-                                        }
-
-                                        mg.Statement.Generate("return hash.ToHashCode();");
-                                    });
+                                    mg.Statement.Generate("return hash.ToHashCode();");
                                 });
-                            }
-                        });
+                            });
+                        }
                     });
+                });
 
-                    var comparerBuilder = new CSharpScriptBuilder();
-                    comparerBuilder.BuildAndNewLine(comparerRoot.Result);
-                    context.AddSource($"Katuusagi.MemoizationForUnity.MemoizationEqualityComparer.Generated.cs", SourceText.From(comparerBuilder.ToString(), Encoding.UTF8));
-                }
-                catch (Exception e)
-                {
-                    ContextUtils.Log(e);
-                }
+                var comparerBuilder = new CSharpScriptBuilder();
+                comparerBuilder.BuildAndNewLine(comparerRoot.Result);
+                context.AddSource($"Katuusagi.MemoizationForUnity.MemoizationEqualityComparer.Generated.cs", SourceText.From(comparerBuilder.ToString(), Encoding.UTF8));
+            }
+            catch (Exception e)
+            {
+                ContextUtils.Log(e);
             }
         }
 
@@ -1925,7 +1923,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                         bool isPartial = type.IsPerfectPartial();
                         if (!isPartial)
                         {
-                            context.Error("MEMOIZATION001", "Memoization failed.", "Memoization is partial type member only.", type.GetLocation());
+                            ContextUtils.LogError("MEMOIZATION001", "Memoization failed.", "Memoization is partial type member only.", type);
                             continue;
                         }
 
@@ -1947,13 +1945,13 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                         {
                             if (cacheComparer != null)
                             {
-                                context.Error("MEMOIZATION004", "Memoization failed.", "`CompareArrayElement` parameter and the `CacheComparer` parameter cannot be used simultaneously.", method.GetLocation());
+                                ContextUtils.LogError("MEMOIZATION004", "Memoization failed.", "`CompareArrayElement` parameter and the `CacheComparer` parameter cannot be used simultaneously.", method);
                                 continue;
                             }
 
                             if (method.ParameterList == null || !method.ParameterList.Parameters.Any(v => v.Type.ToString().EndsWith("[]")))
                             {
-                                context.Error("MEMOIZATION005", "Memoization failed.", "`CompareArrayElement` parameter cannot be used if method parameters does not have an array type.", method.GetLocation());
+                                ContextUtils.LogError("MEMOIZATION005", "Memoization failed.", "`CompareArrayElement` parameter cannot be used if method parameters does not have an array type.", method);
                                 continue;
                             }
                         }
@@ -1977,7 +1975,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                         bool isStatic = methodModifier.HasFlag(ModifierType.Static);
                         if (isStruct && !isStatic)
                         {
-                            context.Error("MEMOIZATION002", "Memoization failed.", "Memoization is static member or class instance member only.", method.GetLocation());
+                            ContextUtils.LogError("MEMOIZATION002", "Memoization failed.", "Memoization is static member or class instance member only.", method);
                             continue;
                         }
 
@@ -1985,12 +1983,12 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                         {
                             if (!isStatic)
                             {
-                                context.Error("MEMOIZATION006", "Memoization failed.", "\"ThreadStatic\" is static member only.", method.GetLocation());
+                                ContextUtils.LogError("MEMOIZATION006", "Memoization failed.", "\"ThreadStatic\" is static member only.", method);
                             }
                             
                             if (isClearable)
                             {
-                                context.Error("MEMOIZATION007", "Memoization failed.", "\"ThreadStatic\" is not clearable.", method.GetLocation());
+                                ContextUtils.LogError("MEMOIZATION007", "Memoization failed.", "\"ThreadStatic\" is not clearable.", method);
                             }
                         }
 
@@ -2064,7 +2062,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
 
                         if (!methodInfo.OutputParameters.Any() && !methodInfo.HasReturnType)
                         {
-                            context.Error("MEMOIZATION003", "Memoization failed.", "Memoization must always return. Or it must have an out or ref parameter.", method.GetLocation());
+                            ContextUtils.LogError("MEMOIZATION003", "Memoization failed.", "Memoization must always return. Or it must have an out or ref parameter.", method);
                             continue;
                         }
 

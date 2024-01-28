@@ -1,23 +1,411 @@
 ﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Xml.Linq;
+using System.Text.RegularExpressions;
 
-namespace Katuusagi.MemoizationForUnity.SourceGenerator.Utils
+namespace Katuusagi.SourceGeneratorCommon
 {
     public static class SyntaxUtils
     {
+        private static readonly Regex NameOfMatch = new Regex("^nameof\\(.*\\)$");
+        private static readonly Regex TypeOfMatch = new Regex("^typeof\\(.*\\)$");
+
+        public static IEnumerable<AttributeSyntax> GetAttributes(this MemberDeclarationSyntax self)
+        {
+            return self.AttributeLists.SelectMany(v => v.Attributes);
+        }
+
+        public static IEnumerable<AttributeSyntax> GetAttributes(this TypeParameterSyntax self)
+        {
+            return self.AttributeLists.SelectMany(v => v.Attributes);
+        }
+
+        public static IEnumerable<AttributeSyntax> GetAttributes(this ParameterSyntax self)
+        {
+            return self.AttributeLists.SelectMany(v => v.Attributes);
+        }
+
+        public static IEnumerable<AttributeSyntax> GetAttributes(this MemberDeclarationSyntax self, IEnumerable<string> attributeNames)
+        {
+            return self.GetAttributes().Where(v => attributeNames.Contains(v.Name.ToString()));
+        }
+
+        public static IEnumerable<AttributeSyntax> GetAttributes(this TypeParameterSyntax self, IEnumerable<string> attributeNames)
+        {
+            return self.GetAttributes().Where(v => attributeNames.Contains(v.Name.ToString()));
+        }
+
+        public static IEnumerable<AttributeSyntax> GetAttributes(this ParameterSyntax self, IEnumerable<string> attributeNames)
+        {
+            return self.GetAttributes().Where(v => attributeNames.Contains(v.Name.ToString()));
+        }
+
+        public static AttributeSyntax GetAttribute(this MemberDeclarationSyntax self, IEnumerable<string> attributeNames)
+        {
+            return self.GetAttributes().FirstOrDefault(v => attributeNames.Contains(v.Name.ToString()));
+        }
+
+        public static AttributeSyntax GetAttribute(this TypeParameterSyntax self, IEnumerable<string> attributeNames)
+        {
+            return self.GetAttributes().FirstOrDefault(v => attributeNames.Contains(v.Name.ToString()));
+        }
+
+        public static AttributeSyntax GetAttribute(this ParameterSyntax self, IEnumerable<string> attributeNames)
+        {
+            return self.GetAttributes().FirstOrDefault(v => attributeNames.Contains(v.Name.ToString()));
+        }
+
         public static AttributeSyntax GetAttribute(this MemberDeclarationSyntax self, string name)
         {
-            return self.AttributeLists.SelectMany(v => v.Attributes).FirstOrDefault(v => v.Name.ToString() == name);
+            return self.GetAttributes().FirstOrDefault(v => v.Name.ToString() == name);
+        }
+
+        public static AttributeSyntax GetAttribute(this TypeParameterSyntax self, string name)
+        {
+            return self.GetAttributes().FirstOrDefault(v => v.Name.ToString() == name);
+        }
+
+        public static AttributeSyntax GetAttribute(this ParameterSyntax self, string name)
+        {
+            return self.GetAttributes().FirstOrDefault(v => v.Name.ToString() == name);
+        }
+
+        public static AttributeArgumentSyntax GetArgument(this AttributeSyntax self, string name, int index)
+        {
+            return self.GetArgument(name) ?? self.GetArgument(index);
+        }
+
+        public static AttributeArgumentSyntax GetArgument(this AttributeSyntax self, int index)
+        {
+            var argments = self?.ArgumentList?.Arguments;
+            return argments?.ElementAtOrDefault(index);
         }
 
         public static AttributeArgumentSyntax GetArgument(this AttributeSyntax self, string name)
         {
-            var argments = self.ArgumentList?.Arguments;
-            return argments?.FirstOrDefault(v => v.NameEquals?.Name?.ToString() == name || v.NameColon?.Name?.ToString() == name);
+            if (name == null)
+            {
+                return null;
+            }
+
+            var argments = self?.ArgumentList?.Arguments;
+            return argments?.FirstOrDefault(v => v?.NameEquals?.Name?.ToString() == name || v?.NameColon?.Name?.ToString() == name);
+        }
+
+        public static bool TryGetArgumentValue(this AttributeSyntax attr, string name, int index, string defaultValue, out string result)
+        {
+            var str = attr.GetArgument(name, index)?.Expression?.ToString();
+            if (str == null)
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            if (str == "null")
+            {
+                result = null;
+                return true;
+            }
+
+            str = str?.Replace("\"", string.Empty);
+            if (NameOfMatch.IsMatch(str))
+            {
+                str = str.Substring(7, str.Length - 8).Split('.').Last();
+            }
+            if (TypeOfMatch.IsMatch(str))
+            {
+                str = str.Substring(7, str.Length - 8);
+            }
+
+            result = str;
+            return true;
+        }
+
+        public static bool TryGetArgumentValue(this AttributeSyntax attr, string name, int index, char defaultValue, out char result)
+        {
+            var str = attr.GetArgument(name, index)?.Expression?.ToString();
+            if (str == null)
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            str = str?.Replace("\'", string.Empty);
+            if (!char.TryParse(str, out result))
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            return true;
+        }
+
+        public static bool TryGetArgumentValue(this AttributeSyntax attr, string name, int index, bool defaultValue, out bool result)
+        {
+            var str = attr.GetArgument(name, index)?.Expression?.ToString();
+            if (str == null)
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            if (!bool.TryParse(str, out result))
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            return true;
+        }
+
+        public static bool TryGetArgumentValue(this AttributeSyntax attr, string name, int index, sbyte defaultValue, out sbyte result)
+        {
+            var str = attr.GetArgument(name, index)?.Expression?.ToString();
+            if (str == null)
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            if (!sbyte.TryParse(str, out result))
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            return true;
+        }
+
+        public static bool TryGetArgumentValue(this AttributeSyntax attr, string name, int index, byte defaultValue, out byte result)
+        {
+            var str = attr.GetArgument(name, index)?.Expression?.ToString();
+            if (str == null)
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            if (!byte.TryParse(str, out result))
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            return true;
+        }
+
+        public static bool TryGetArgumentValue(this AttributeSyntax attr, string name, int index, short defaultValue, out short result)
+        {
+            var str = attr.GetArgument(name, index)?.Expression?.ToString();
+            if (str == null)
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            if (!short.TryParse(str, out result))
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            return true;
+        }
+
+        public static bool TryGetArgumentValue(this AttributeSyntax attr, string name, int index, ushort defaultValue, out ushort result)
+        {
+            var str = attr.GetArgument(name, index)?.Expression?.ToString();
+            if (str == null)
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            if (!ushort.TryParse(str, out result))
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            return true;
+        }
+
+        public static bool TryGetArgumentValue(this AttributeSyntax attr, string name, int index, int defaultValue, out int result)
+        {
+            var str = attr.GetArgument(name, index)?.Expression?.ToString();
+            if (str == null)
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            if (!int.TryParse(str, out result))
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            return true;
+        }
+
+        public static bool TryGetArgumentValue(this AttributeSyntax attr, string name, int index, uint defaultValue, out uint result)
+        {
+            var str = attr.GetArgument(name, index)?.Expression?.ToString();
+            if (str == null)
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            if (!uint.TryParse(str, out result))
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            return true;
+        }
+
+        public static bool TryGetArgumentValue(this AttributeSyntax attr, string name, int index, long defaultValue, out long result)
+        {
+            var str = attr.GetArgument(name, index)?.Expression?.ToString();
+            if (str == null)
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            if (!long.TryParse(str, out result))
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            return true;
+        }
+
+        public static bool TryGetArgumentValue(this AttributeSyntax attr, string name, int index, ulong defaultValue, out ulong result)
+        {
+            var str = attr.GetArgument(name, index)?.Expression?.ToString();
+            if (str == null)
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            if (!ulong.TryParse(str, out result))
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            return true;
+        }
+
+        public static bool TryGetArgumentValue(this AttributeSyntax attr, string name, int index, float defaultValue, out float result)
+        {
+            var str = attr.GetArgument(name, index)?.Expression?.ToString();
+            if (str == null)
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            if (!float.TryParse(str, out result))
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            return true;
+        }
+
+        public static bool TryGetArgumentValue(this AttributeSyntax attr, string name, int index, double defaultValue, out double result)
+        {
+            var str = attr.GetArgument(name, index)?.Expression?.ToString();
+            if (str == null)
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            if (!double.TryParse(str, out result))
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            return true;
+        }
+
+        public static bool TryGetArgumentValue<TEnum>(this AttributeSyntax attr, string name, int index, TEnum defaultValue, out TEnum result)
+            where TEnum : struct
+        {
+            var str = attr.GetArgument(name, index)?.Expression?.ToString();
+            if (str == null)
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            var enumText = str.Split('.').Last();
+            if (!Enum.TryParse(enumText, out result))
+            {
+                result = defaultValue;
+                return false;
+            }
+            return true;
+        }
+
+        public static bool TryGetArgumentValue(this AttributeSyntax attr, string name, int index, string[] defaultValue, out string[] result)
+        {
+            var expression = attr.GetArgument(name, index)?.Expression;
+            if (!(expression is ArrayCreationExpressionSyntax arrayExpression))
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            var initializer = arrayExpression.Initializer;
+            if (initializer == null)
+            {
+                result = defaultValue;
+                return false;
+            }
+
+            result = new string[initializer.Expressions.Count];
+            for (int i = 0; i < initializer.Expressions.Count; ++i)
+            {
+                result[i] = null;
+                var elem = initializer.Expressions[i];
+                var str = elem?.ToString();
+                if (str == null)
+                {
+                    continue;
+                }
+
+                if (str == "null")
+                {
+                    continue;
+                }
+
+                str = str?.Replace("\"", string.Empty);
+                if (NameOfMatch.IsMatch(str))
+                {
+                    str = str.Substring(7, str.Length - 8).Split('.').Last();
+                }
+                if (TypeOfMatch.IsMatch(str))
+                {
+                    str = str.Substring(7, str.Length - 8);
+                }
+
+                result[i] = str;
+            }
+
+            return true;
         }
 
         public static bool HasModifier(this MemberDeclarationSyntax self, string name)
@@ -25,10 +413,20 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator.Utils
             return self.Modifiers.Any(v => v.ValueText == name);
         }
 
+        public static bool HasModifier(this ParameterSyntax self, string name)
+        {
+            return self.Modifiers.Any(v => v.ValueText == name);
+        }
+
         public static bool IsPerfectPartial(this TypeDeclarationSyntax self)
         {
             var parents = GetAncestorsAndSelf<TypeDeclarationSyntax>(self);
-            return parents.All(v => v.HasModifier("partial"));
+            return parents.All(v => v.IsPartial());
+        }
+
+        public static bool IsPartial(this MemberDeclarationSyntax self)
+        {
+            return self.HasModifier("partial");
         }
 
         public static IEnumerable<string> GetTypeNames(this TypeDeclarationSyntax self, string fullNameSpace, string typeName)
@@ -121,12 +519,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator.Utils
         public static string GetAncestorPath(this TypeDeclarationSyntax self)
         {
             var ancestors = self.GetAncestors<TypeDeclarationSyntax>().Reverse();
-            var ancestorPath = string.Concat(ancestors.Select(v => $"{v.Identifier}-"));
-            if (!string.IsNullOrEmpty(ancestorPath))
-            {
-                ancestorPath = ancestorPath.Remove(ancestorPath.Length - 1);
-            }
-
+            var ancestorPath = string.Join("-", ancestors.Select(v => v.Identifier));
             return ancestorPath;
         }
 

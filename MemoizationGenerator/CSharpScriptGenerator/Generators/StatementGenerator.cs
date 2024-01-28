@@ -41,7 +41,10 @@ namespace Katuusagi.CSharpScriptGenerator
 
         public void Generate(string line, Action scope)
         {
-            Generate(line);
+            if (!string.IsNullOrEmpty(line))
+            {
+                Generate(line);
+            }
             Generate(StatementOperation.StartScope);
             scope?.Invoke();
             Generate(StatementOperation.EndScope);

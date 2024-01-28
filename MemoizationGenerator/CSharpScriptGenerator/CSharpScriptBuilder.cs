@@ -421,7 +421,8 @@ namespace Katuusagi.CSharpScriptGenerator
             Append(data.Name);
         }
 
-        public void BuildAndNewLineWhere(GenericParameterData data)
+
+        public void BuildWhere(GenericParameterData data)
         {
             if (data == null ||
                 !data.Wheres.Any())
@@ -440,6 +441,17 @@ namespace Katuusagi.CSharpScriptGenerator
             }
 
             RemoveBack(2);
+        }
+
+        public void BuildAndNewLineWhere(GenericParameterData data)
+        {
+            if (data == null ||
+                !data.Wheres.Any())
+            {
+                return;
+            }
+
+            BuildWhere(data);
             AppendLine();
         }
 
@@ -545,7 +557,8 @@ namespace Katuusagi.CSharpScriptGenerator
                 return;
             }
 
-            if (data.Modifier.HasFlag(ModifierType.Static))
+            if (data.Modifier.HasFlag(ModifierType.Static) ||
+                data.Modifier.HasFlag(ModifierType.Const))
             {
                 enableDefaultValue = true;
             }
@@ -677,8 +690,18 @@ namespace Katuusagi.CSharpScriptGenerator
             Build(data.Params);
             if (data.Modifier.HasFlag(ModifierType.Abstract) ||
                 data.Modifier.HasFlag(ModifierType.Extern) ||
-                (!data.Statements.Any() && data.Modifier.HasFlag(ModifierType.Partial)))
+                (!data.Statements.Any() && (data.Modifier.HasFlag(ModifierType.Partial) || data.Modifier == ModifierType.None)))
             {
+                if (data.GenericParams.Any(v => v.Wheres.Any()))
+                {
+                    AppendLine("");
+                    for (int i = 0; i < data.GenericParams.Count - 1; ++i)
+                    {
+                        BuildAndNewLineWhere(data.GenericParams[i]);
+                    }
+
+                    BuildWhere(data.GenericParams.Last());
+                }
                 AppendLine(";");
             }
             else

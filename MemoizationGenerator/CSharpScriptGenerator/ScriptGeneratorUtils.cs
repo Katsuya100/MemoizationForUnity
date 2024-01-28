@@ -107,6 +107,20 @@ namespace Katuusagi.CSharpScriptGenerator
             return result;
         }
 
+        public static string GetArgumentModifierLabel(this ModifierType modifier)
+        {
+            if (modifier.HasFlag(ModifierType.Out))
+            {
+                return "out ";
+            }
+            else if (modifier.HasFlag(ModifierType.Ref))
+            {
+                return "ref ";
+            }
+
+            return string.Empty;
+        }
+
         public static string GetModifierLabel(this ModifierType modifier)
         {
             string result = string.Empty;
