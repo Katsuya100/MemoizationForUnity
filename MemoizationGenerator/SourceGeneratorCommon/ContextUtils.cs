@@ -79,14 +79,22 @@ namespace Katuusagi.SourceGeneratorCommon
         public static string GetRootPath(this GeneratorExecutionContext context)
         {
             var scriptPath = context.Compilation.SyntaxTrees.Select(v => v.FilePath.Replace("\\", "/")).FirstOrDefault(v => v.Contains("/Assets/") || v.Contains("/Library/") || v.Contains("/Packages/"));
-            var index = scriptPath.IndexOf("/Assets/");
-            if (index < 0)
+            var assetsIndex = scriptPath.IndexOf("/Assets/");
+            var libraryIndex = scriptPath.IndexOf("/Library/");
+            var packagesIndex = scriptPath.IndexOf("/Packages/");
+
+            int index = int.MaxValue;
+            if (assetsIndex >= 0)
             {
-                index = scriptPath.IndexOf("/Library/");
-                if (index < 0)
-                {
-                    index = scriptPath.IndexOf("/Packages/");
-                }
+                index = Math.Min(assetsIndex, index);
+            }
+            if (libraryIndex >= 0)
+            {
+                index = Math.Min(libraryIndex, index);
+            }
+            if (packagesIndex >= 0)
+            {
+                index = Math.Min(packagesIndex, index);
             }
 
             var rootPath = scriptPath.Substring(0, index + 1);
