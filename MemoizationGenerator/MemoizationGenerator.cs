@@ -8,7 +8,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace Katuusagi.MemoizationForUnity.SourceGenerator
 {
@@ -69,7 +68,9 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
             public string NameSpace;
             public string Name;
             public List<MethodInfo> Methods;
-            public string FileName
+
+            public string FileName;
+            private string _FileName
             {
                 get
                 {
@@ -88,21 +89,17 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public string AncestorPath
+            public string AncestorPath;
+            private string _AncestorPath
             {
                 get
                 {
-                    var ancestorPath = string.Concat(Ancestors.Select(v => $"{v.Name}-"));
-                    if (!string.IsNullOrEmpty(ancestorPath))
-                    {
-                        ancestorPath = ancestorPath.Remove(ancestorPath.Length - 1);
-                    }
-
-                    return ancestorPath;
+                    return string.Join("-", Ancestors.Select(v => v.Name));
                 }
             }
 
-            public bool HasGenericClearableStaticTypeCache
+            public bool HasGenericClearableStaticTypeCache;
+            private bool _HasGenericClearableStaticTypeCache
             {
                 get
                 {
@@ -110,13 +107,22 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public bool HasThreadSafeGenericClearableStaticTypeCache
+            public bool HasThreadSafeGenericClearableStaticTypeCache;
+            private bool _HasThreadSafeGenericClearableStaticTypeCache
             {
                 get
                 {
                     return Methods.Any(v => v.IsClearableGenericStaticTypeCache && v.IsConcurrent);
                 }
 
+            }
+
+            public void Init()
+            {
+                FileName = _FileName;
+                AncestorPath = _AncestorPath;
+                HasGenericClearableStaticTypeCache = _HasGenericClearableStaticTypeCache;
+                HasThreadSafeGenericClearableStaticTypeCache = _HasThreadSafeGenericClearableStaticTypeCache;
             }
         }
 
@@ -129,22 +135,6 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
 
         private struct MethodInfo
         {
-            public string Id;
-            public string[] Attributes;
-            public ModifierType Modifier;
-            public string Name;
-            public string RawName;
-            public bool CompareArrayElement;
-            public string CacheComparer;
-            public bool IsClearable;
-            public ThreadSafeType ThreadSafeType;
-            public string ReturnType;
-            public bool HasGenericTypeInReturn;
-            public string InterruptCacheMethod;
-            public string OnCachedMethod;
-            public List<GenericParameterInfo> GenericParameters;
-            public List<ParameterInfo> Parameters;
-            public string ParameterArrayFlag;
             private static readonly HashSet<string> SimpleKeys = new HashSet<string>()
             {
                 "bool",
@@ -197,7 +187,25 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 "global::System.Char",
             };
 
-            public IEnumerable<ParameterInfo> OutputParameters
+            public string Id;
+            public string[] Attributes;
+            public ModifierType Modifier;
+            public string Name;
+            public string RawName;
+            public bool CompareArrayElement;
+            public string CacheComparer;
+            public bool IsClearable;
+            public ThreadSafeType ThreadSafeType;
+            public string ReturnType;
+            public bool HasGenericTypeInReturn;
+            public string InterruptCacheMethod;
+            public string OnCachedMethod;
+            public List<GenericParameterInfo> GenericParameters;
+            public List<ParameterInfo> Parameters;
+            public string ParameterArrayFlag;
+
+            public ParameterInfo[] OutputParameters;
+            private IEnumerable<ParameterInfo> _OutputParameters
             {
                 get
                 {
@@ -205,7 +213,8 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public IEnumerable<ParameterInfo> InputParameters
+            public ParameterInfo[] InputParameters;
+            private IEnumerable<ParameterInfo> _InputParameters
             {
                 get
                 {
@@ -213,63 +222,8 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public bool IsStatic
-            {
-                get
-                {
-                    return Modifier.HasFlag(ModifierType.Static);
-                }
-            }
-
-            public bool IsUseStaticCache
-            {
-                get
-                {
-                    return IsStatic;
-                }
-            }
-
-            public bool IsUseStaticTypeCache
-            {
-                get
-                {
-                    return IsUseStaticCache && (HasGenericParameter || (!HasKey && !IsClearable));
-                }
-            }
-
-            public bool IsUseBaseTypeCache
-            {
-                get
-                {
-                    return !IsStatic && HasGenericParameter && (HasGenericTypeInReturn || HasGenericTypeInParameters);
-                }
-            }
-
-            public bool IsThreadStatic
-            {
-                get
-                {
-                    return IsStatic && ThreadSafeType == ThreadSafeType.ThreadStatic;
-                }
-            }
-
-            public bool IsConcurrent
-            {
-                get
-                {
-                    return ThreadSafeType == ThreadSafeType.Concurrent;
-                }
-            }
-
-            public bool IsClearableGenericStaticTypeCache
-            {
-                get
-                {
-                    return IsClearable && IsUseStaticTypeCache && HasGenericParameter;
-                }
-            }
-
-            public bool HasGenericParameter
+            public bool HasGenericParameter;
+            private bool _HasGenericParameter
             {
                 get
                 {
@@ -277,7 +231,8 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public bool HasInputParameter
+            public bool HasInputParameter;
+            private bool _HasInputParameter
             {
                 get
                 {
@@ -285,7 +240,8 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public bool HasOutputParameter
+            public bool HasOutputParameter;
+            private bool _HasOutputParameter
             {
                 get
                 {
@@ -293,7 +249,8 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public bool HasReturnType
+            public bool HasReturnType;
+            private bool _HasReturnType
             {
                 get
                 {
@@ -305,25 +262,17 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public bool HasKey
+            public bool HasKey;
+            private bool _HasKey
             {
                 get
                 {
-                    if (HasGenericParameter)
-                    {
-                        return true;
-                    }
-
-                    if (HasInputParameter)
-                    {
-                        return true;
-                    }
-
-                    return false;
+                    return HasGenericParameter || HasInputParameter;
                 }
             }
 
-            public bool HasGenericTypeInParameters
+            public bool HasGenericTypeInParameters;
+            private bool _HasGenericTypeInParameters
             {
                 get
                 {
@@ -331,7 +280,80 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public bool IsUseTypeIdKey
+            public bool HasParams;
+            private bool _HasParams
+            {
+                get
+                {
+                    return Parameters.LastOrDefault().Modifier?.Contains("params") ?? false;
+                }
+            }
+
+            public bool IsStatic;
+            private bool _IsStatic
+            {
+                get
+                {
+                    return Modifier.HasFlag(ModifierType.Static);
+                }
+            }
+
+            public bool IsUseStaticCache;
+            private bool _IsUseStaticCache
+            {
+                get
+                {
+                    return IsStatic;
+                }
+            }
+
+            public bool IsUseStaticTypeCache;
+            private bool _IsUseStaticTypeCache
+            {
+                get
+                {
+                    return IsUseStaticCache && (HasGenericParameter || (!HasKey && !IsClearable));
+                }
+            }
+
+            public bool IsUseBaseTypeCache;
+            private bool _IsUseBaseTypeCache
+            {
+                get
+                {
+                    return !IsStatic && HasGenericParameter && (HasGenericTypeInReturn || HasGenericTypeInParameters);
+                }
+            }
+
+            public bool IsThreadStatic;
+            private bool _IsThreadStatic
+            {
+                get
+                {
+                    return IsStatic && ThreadSafeType == ThreadSafeType.ThreadStatic;
+                }
+            }
+
+            public bool IsConcurrent;
+            private bool _IsConcurrent
+            {
+                get
+                {
+                    return ThreadSafeType == ThreadSafeType.Concurrent;
+                }
+            }
+
+            public bool IsClearableGenericStaticTypeCache;
+            private bool _IsClearableGenericStaticTypeCache
+            {
+                get
+                {
+                    return IsClearable && IsUseStaticTypeCache && HasGenericParameter;
+                }
+            }
+
+            public bool IsUseTypeIdKey;
+            private bool _IsUseTypeIdKey
             {
                 get
                 {
@@ -339,7 +361,8 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public bool IsSimpleKey
+            public bool IsSimpleKey;
+            private bool _IsSimpleKey
             {
                 get
                 {
@@ -347,7 +370,8 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public int CacheKeyCount
+            public int CacheKeyCount;
+            private int _CacheKeyCount
             {
                 get
                 {
@@ -355,7 +379,8 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public CachingStyle CachingStyle
+            public CachingStyle CachingStyle;
+            private CachingStyle _CachingStyle
             {
                 get
                 {
@@ -392,23 +417,17 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public int ResultCount
+            public int ResultCount;
+            private int _ResultCount
             {
                 get
                 {
-                    int result = 0;
-                    if (HasReturnType)
-                    {
-                        ++result;
-                    }
-
-                    result += OutputParameters.Count();
-                    return result;
+                    return OutputParameters.Count() + (HasReturnType ? 1 : 0);
                 }
             }
-            
 
-            public ModifierType CacheFieldModifier
+            public ModifierType CacheFieldModifier;
+            private ModifierType _CacheFieldModifier
             {
                 get
                 {
@@ -421,7 +440,8 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public string StaticFieldWrappedType
+            public string StaticFieldWrappedType;
+            private string _StaticFieldWrappedType
             {
                 get
                 {
@@ -434,7 +454,8 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public string StaticFieldWrappedTypeFullName
+            public string StaticFieldWrappedTypeFullName;
+            private string _StaticFieldWrappedTypeFullName
             {
                 get
                 {
@@ -452,7 +473,8 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public string CacheValueName
+            public string CacheValueName;
+            private string _CacheValueName
             {
                 get
                 {
@@ -465,7 +487,8 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public string CacheValueTypeName
+            public string CacheValueTypeName;
+            private string _CacheValueTypeName
             {
                 get
                 {
@@ -504,7 +527,8 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public string CacheValueTypeDeclarationName
+            public string CacheValueTypeDeclarationName;
+            private string _CacheValueTypeDeclarationName
             {
                 get
                 {
@@ -532,12 +556,13 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public string CallRawMethod
+            public string CallRawMethod;
+            private string _CallRawMethod
             {
                 get
                 {
                     string genericArgs = string.Empty;
-                    if (!string.IsNullOrEmpty(GenericArgs))
+                    if (HasGenericParameter)
                     {
                         genericArgs = $"<{GenericArgs}>";
                     }
@@ -546,12 +571,13 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public string CallAndDeclairRawMethod
+            public string CallAndDeclairRawMethod;
+            private string _CallAndDeclairRawMethod
             {
                 get
                 {
                     string genericArgs = string.Empty;
-                    if (!string.IsNullOrEmpty(GenericArgs))
+                    if (HasGenericParameter)
                     {
                         genericArgs = $"<{GenericArgs}>";
                     }
@@ -560,12 +586,13 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public string OnCachedMethodWithGeneric
+            public string OnCachedMethodWithGeneric;
+            private string _OnCachedMethodWithGeneric
             {
                 get
                 {
                     string genericArgs = string.Empty;
-                    if (!string.IsNullOrEmpty(GenericArgs))
+                    if (HasGenericParameter)
                     {
                         genericArgs = $"<{GenericArgs}>";
                     }
@@ -574,7 +601,8 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public string FieldInitializer
+            public string FieldInitializer;
+            private string _FieldInitializer
             {
                 get
                 {
@@ -587,7 +615,8 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public string FieldValue
+            public string FieldValue;
+            private string _FieldValue
             {
                 get
                 {
@@ -606,26 +635,17 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public string GenericArgs
+            public string GenericArgs;
+            private string _GenericArgs
             {
                 get
                 {
-                    string result = string.Empty;
-                    foreach (var parameter in GenericParameters)
-                    {
-                        result = $"{result}{parameter.Type}, ";
-                    }
-
-                    if (!string.IsNullOrEmpty(result))
-                    {
-                        result = result.Remove(result.Length - 2);
-                    }
-
-                    return result;
+                    return GenericParameters.Select(v => v.Type).JoinParameters();
                 }
             }
 
-            public string DeclarationKey
+            public string DeclarationKey;
+            private string _DeclarationKey
             {
                 get
                 {
@@ -638,26 +658,18 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public string Key
+            public string Key;
+            private string _Key
             {
                 get
                 {
-                    string result = string.Empty;
+                    var parameters = InputParameters.Select(v => v.Name);
                     if (IsUseTypeIdKey)
                     {
-                        result = $"{result}{CalcTypeId(0)}.Id, ";
+                        parameters = parameters.Prepend($"{CalcTypeId(0)}.Id");
                     }
 
-                    foreach (var parameter in InputParameters)
-                    {
-                        result = $"{result}{parameter.Name}, ";
-                    }
-
-                    if (!string.IsNullOrEmpty(result))
-                    {
-                        result = result.Remove(result.Length - 2);
-                    }
-
+                    var result = parameters.JoinParameters();
                     switch (CachingStyle)
                     {
                         case CachingStyle.SingleKey:
@@ -665,7 +677,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                             {
                                 return result;
                             }
-                            return $"System.ValueTuple.Create({result})";
+                            return $"global::System.ValueTuple.Create({result})";
                         case CachingStyle.MultipleKey:
                             return $"({result})";
                     }
@@ -674,30 +686,8 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            private string CalcTypeId(int start)
-            {
-                string genericArg = string.Empty;
-                int i;
-                for (i = start; i < 7 + start && i < GenericParameters.Count; ++i)
-                {
-                    genericArg += $"{GenericParameters[i].Type}, ";
-                }
-
-                if (i < GenericParameters.Count)
-                {
-                    genericArg += $"{CalcTypeId(i)}, ";
-                }
-
-
-                if (!string.IsNullOrEmpty(genericArg))
-                {
-                    genericArg = genericArg.Remove(genericArg.Length - 2);
-                }
-
-                return $"Katuusagi.MemoizationForUnity.Utils.MemoizationUtils.TypeId<{genericArg}>";
-            }
-
-            public string GenericKeyType
+            public string GenericKeyType;
+            private string _GenericKeyType
             {
                 get
                 {
@@ -706,17 +696,12 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                         return string.Empty;
                     }
 
-                    var result = "int";
-                    if (SimpleKeys.Contains(result))
-                    {
-                        return result;
-                    }
-
-                    return $"System.ValueTuple.Create({result})";
+                    return "int";
                 }
             }
 
-            public IEnumerable<string> KeyTypeArgs
+            public string[] KeyTypeArgs;
+            private IEnumerable<string> _KeyTypeArgs
             {
                 get
                 {
@@ -732,7 +717,8 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public string KeyType
+            public string KeyType;
+            private string _KeyType
             {
                 get
                 {
@@ -740,37 +726,20 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                     switch (CachingStyle)
                     {
                         case CachingStyle.SingleKey:
-                            foreach (var arg in KeyTypeArgs)
-                            {
-                                result = $"{result}{arg}, ";
-                            }
-
-                            if (!string.IsNullOrEmpty(result))
-                            {
-                                result = result.Remove(result.Length - 2);
-                            }
-
+                            result = KeyTypeArgs.JoinParameters();
                             if (SimpleKeys.Contains(result))
                             {
                                 return result;
                             }
-                            return $"System.ValueTuple<{result}>";
+                            return $"global::System.ValueTuple<{result}>";
                         case CachingStyle.MultipleKey:
+                            var parameters = InputParameters.Select(v => $"{v.Type} {v.Name}");
                             if (IsUseTypeIdKey)
                             {
-                                result = $"{result}int __GenericKey__, ";
+                                parameters = parameters.Prepend("int __GenericKey__");
                             }
 
-                            foreach (var parameter in InputParameters)
-                            {
-                                result = $"{result}{parameter.Type} {parameter.Name}, ";
-                            }
-
-                            if (!string.IsNullOrEmpty(result))
-                            {
-                                result = result.Remove(result.Length - 2);
-                            }
-
+                            result = parameters.JoinParameters();
                             return $"({result})";
                     }
 
@@ -778,7 +747,8 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public bool IsBoolKey
+            public bool IsBoolKey;
+            private bool _IsBoolKey
             {
                 get
                 {
@@ -789,26 +759,18 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public string Result
+            public string Result;
+            private string _Result
             {
                 get
                 {
-                    string result = string.Empty;
+                    var parameters = OutputParameters.Select(v => v.Name);
                     if (HasReturnType)
                     {
-                        result = $"{result}__return__, ";
+                        parameters = parameters.Prepend("__return__");
                     }
 
-                    foreach (var parameter in OutputParameters)
-                    {
-                        result = $"{result}{parameter.Name}, ";
-                    }
-
-                    if (!string.IsNullOrEmpty(result))
-                    {
-                        result = result.Remove(result.Length - 2);
-                    }
-
+                    var result = parameters.JoinParameters();
                     if (ResultCount > 1)
                     {
                         return $"({result})";
@@ -817,133 +779,83 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public string ResultType
+            public string ResultType;
+            private string _ResultType
             {
                 get
                 {
                     string result = string.Empty;
                     if (ResultCount > 1)
                     {
+                        var parameters = OutputParameters.Select(v => $"{v.Type} {v.Name}");
                         if (HasReturnType)
                         {
-                            result = $"{result}{ReturnType} __return__, ";
+                            parameters = parameters.Prepend($"{ReturnType} __return__");
                         }
 
-                        foreach (var parameter in OutputParameters)
-                        {
-                            result = $"{result}{parameter.Type} {parameter.Name}, ";
-                        }
-
-                        if (!string.IsNullOrEmpty(result))
-                        {
-                            result = result.Remove(result.Length - 2);
-                        }
-                        
+                        result = parameters.JoinParameters();
                         return $"({result})";
                     }
-
-                    if (HasReturnType)
+                    else
                     {
-                        result = $"{result}{ReturnType}, ";
-                    }
+                        var parameters = OutputParameters.Select(v => v.Type);
+                        if (HasReturnType)
+                        {
+                            parameters = parameters.Prepend(ReturnType);
+                        }
 
-                    foreach (var parameter in OutputParameters)
-                    {
-                        result = $"{result}{parameter.Type}, ";
+                        return parameters.JoinParameters();
                     }
-
-                    if (!string.IsNullOrEmpty(result))
-                    {
-                        result = result.Remove(result.Length - 2);
-                    }
-
-                    return result;
                 }
             }
 
-            public string ConcatKeyTypeArgs
+            public string ConcatKeyTypeArgs;
+            private string _ConcatKeyTypeArgs
             {
                 get
                 {
-                    string result = string.Empty;
-                    foreach (var arg in KeyTypeArgs)
-                    {
-                        result = $"{result}{arg}, ";
-                    }
-
-                    if (!string.IsNullOrEmpty(result))
-                    {
-                        result = result.Remove(result.Length - 2);
-                    }
-
-                    return result;
+                    return KeyTypeArgs.JoinParameters();
                 }
             }
 
-            public string ConcatArrayElementKeyTypeArgs
+            public string ConcatArrayElementKeyTypeArgs;
+            private string _ConcatArrayElementKeyTypeArgs
             {
                 get
                 {
-                    string result = string.Empty;
-                    foreach (var arg in KeyTypeArgs)
+                    return KeyTypeArgs.Select(v =>
                     {
-                        string a = arg;
+                        string a = v;
                         if (a.EndsWith("[]"))
                         {
                             a = a.Remove(a.Length - 2, 2);
                         }
 
-                        result = $"{result}{a}, ";
-                    }
-
-                    if (!string.IsNullOrEmpty(result))
-                    {
-                        result = result.Remove(result.Length - 2);
-                    }
-
-                    return result;
+                        return a;
+                    }).JoinParameters();
                 }
             }
 
-            public string ConcatArgs
+            public string ConcatArgs;
+            private string _ConcatArgs
             {
                 get
                 {
-                    string result = string.Empty;
-                    foreach (var parameter in Parameters)
-                    {
-                        result = $"{result}{parameter.ModifieredName}, ";
-                    }
-
-                    if (!string.IsNullOrEmpty(result))
-                    {
-                        result = result.Remove(result.Length - 2);
-                    }
-
-                    return result;
+                    return Parameters.Select(v => v.ModifieredName).JoinParameters();
                 }
             }
 
-            public string ConcatDeclairArgs
+            public string ConcatDeclairArgs;
+            private string _ConcatDeclairArgs
             {
                 get
                 {
-                    string result = string.Empty;
-                    foreach (var parameter in Parameters)
-                    {
-                        result = $"{result}{parameter.ModifieredDeclairName}, ";
-                    }
-
-                    if (!string.IsNullOrEmpty(result))
-                    {
-                        result = result.Remove(result.Length - 2);
-                    }
-
-                    return result;
+                    return Parameters.Select(v => v.ModifieredDeclairName).JoinParameters();
                 }
             }
 
-            public string[] ResultReturnCodes
+            public string[] ResultReturnCodes;
+            private string[] _ResultReturnCodes
             {
                 get
                 {
@@ -988,7 +900,8 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public string Comparer
+            public string Comparer;
+            private string _Comparer
             {
                 get
                 {
@@ -1004,13 +917,13 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
 
                     if (CompareArrayElement)
                     {
-                        return $"Katuusagi.MemoizationForUnity.ArrayElementEqualityComparer{ParameterArrayFlag}<{ConcatArrayElementKeyTypeArgs}>.Default";
+                        return $"global::Katuusagi.MemoizationForUnity.ArrayElementEqualityComparer{ParameterArrayFlag}<{ConcatArrayElementKeyTypeArgs}>.Default";
                     }
 
                     var args = ConcatKeyTypeArgs;
                     if (HasParams)
                     {
-                        return $"Katuusagi.MemoizationForUnity.ParamsEqualityComparer<{args.Remove(args.Length - 2, 2)}>.Default";
+                        return $"global::Katuusagi.MemoizationForUnity.ParamsEqualityComparer<{args.Remove(args.Length - 2, 2)}>.Default";
                     }
 
                     if (CachingStyle == CachingStyle.SingleKey)
@@ -1018,16 +931,100 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                         return string.Empty;
                     }
 
-                    return $"Katuusagi.MemoizationForUnity.MemoizationEqualityComparer<{args}>.Default";
+                    return $"global::Katuusagi.MemoizationForUnity.MemoizationEqualityComparer<{args}>.Default";
                 }
             }
 
-            public bool HasParams
+            private string CalcTypeId(int start)
             {
-                get
+                string genericArg = string.Empty;
+                int i;
+                for (i = start; i < 7 + start && i < GenericParameters.Count; ++i)
                 {
-                    return Parameters.LastOrDefault().Modifier?.Contains("params") ?? false;
+                    genericArg += $"{GenericParameters[i].Type}, ";
                 }
+
+                if (i < GenericParameters.Count)
+                {
+                    genericArg += $"{CalcTypeId(i)}, ";
+                }
+
+                if (!string.IsNullOrEmpty(genericArg))
+                {
+                    genericArg = genericArg.Remove(genericArg.Length - 2);
+                }
+
+                return $"global::Katuusagi.MemoizationForUnity.Utils.MemoizationUtils.TypeId<{genericArg}>";
+            }
+
+            public void PreInit()
+            {
+                OutputParameters = _OutputParameters.ToArray();
+                InputParameters = _InputParameters.ToArray();
+                HasGenericParameter = _HasGenericParameter;
+                HasInputParameter = _HasInputParameter;
+                HasReturnType = _HasReturnType;
+                HasKey = _HasKey;
+                HasGenericTypeInParameters = _HasGenericTypeInParameters;
+                IsStatic = _IsStatic;
+                IsUseStaticCache = _IsUseStaticCache;
+                IsUseStaticTypeCache = _IsUseStaticTypeCache;
+                IsUseBaseTypeCache = _IsUseBaseTypeCache;
+                IsUseTypeIdKey = _IsUseTypeIdKey;
+                HasParams = _HasParams;
+                KeyTypeArgs = _KeyTypeArgs.ToArray();
+                CacheKeyCount = _CacheKeyCount;
+            }
+
+            public void Init()
+            {
+                OutputParameters = _OutputParameters.ToArray();
+                InputParameters = _InputParameters.ToArray();
+                HasGenericParameter = _HasGenericParameter;
+                HasInputParameter = _HasInputParameter;
+                HasOutputParameter = _HasOutputParameter;
+                HasReturnType = _HasReturnType;
+                HasKey = _HasKey;
+                HasGenericTypeInParameters = _HasGenericTypeInParameters;
+                HasParams = _HasParams;
+                IsStatic = _IsStatic;
+                IsUseStaticCache = _IsUseStaticCache;
+                IsUseStaticTypeCache = _IsUseStaticTypeCache;
+                IsUseBaseTypeCache = _IsUseBaseTypeCache;
+                IsThreadStatic = _IsThreadStatic;
+                IsConcurrent = _IsConcurrent;
+                IsClearableGenericStaticTypeCache = _IsClearableGenericStaticTypeCache;
+                IsUseTypeIdKey = _IsUseTypeIdKey;
+                KeyTypeArgs = _KeyTypeArgs.ToArray();
+                CacheKeyCount = _CacheKeyCount;
+                CachingStyle = _CachingStyle;
+                KeyType = _KeyType;
+                IsSimpleKey = _IsSimpleKey;
+                ResultCount = _ResultCount;
+                CacheFieldModifier = _CacheFieldModifier;
+                GenericArgs = _GenericArgs;
+                StaticFieldWrappedType = _StaticFieldWrappedType;
+                StaticFieldWrappedTypeFullName = _StaticFieldWrappedTypeFullName;
+                ResultType = _ResultType;
+                IsBoolKey = _IsBoolKey;
+                GenericKeyType = _GenericKeyType;
+                CacheValueName = _CacheValueName;
+                CacheValueTypeName = _CacheValueTypeName;
+                CacheValueTypeDeclarationName = _CacheValueTypeDeclarationName;
+                ConcatArgs = _ConcatArgs;
+                ConcatDeclairArgs = _ConcatDeclairArgs;
+                CallRawMethod = _CallRawMethod;
+                CallAndDeclairRawMethod = _CallAndDeclairRawMethod;
+                OnCachedMethodWithGeneric = _OnCachedMethodWithGeneric;
+                ConcatArrayElementKeyTypeArgs = _ConcatArrayElementKeyTypeArgs;
+                ConcatKeyTypeArgs = _ConcatKeyTypeArgs;
+                Comparer = _Comparer;
+                FieldValue = _FieldValue;
+                FieldInitializer = _FieldInitializer;
+                DeclarationKey = _DeclarationKey;
+                Key = _Key;
+                Result = _Result;
+                ResultReturnCodes = _ResultReturnCodes;
             }
         }
 
@@ -1047,7 +1044,8 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
             public string Default;
             public bool HasGenericType;
 
-            public string ModifieredTypeName
+            public string ModifieredTypeName;
+            private string _ModifieredTypeName
             {
                 get
                 {
@@ -1060,7 +1058,8 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public string ModifieredName
+            public string ModifieredName;
+            private string _ModifieredName
             {
                 get
                 {
@@ -1078,7 +1077,8 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public string ModifieredDeclairName
+            public string ModifieredDeclairName;
+            private string _ModifieredDeclairName
             {
                 get
                 {
@@ -1096,7 +1096,8 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public bool IsOutput
+            public bool IsOutput;
+            private bool _IsOutput
             {
                 get
                 {
@@ -1104,16 +1105,24 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 }
             }
 
-            public bool IsInput
+            public bool IsInput;
+            private bool _IsInput
             {
                 get
                 {
                     return !Modifier.Contains("out");
                 }
             }
-        }
 
-        private static readonly Regex NameOfMatch = new Regex("^nameof\\(.*\\)$");
+            public void Init()
+            {
+                ModifieredTypeName = _ModifieredTypeName;
+                ModifieredName = _ModifieredName;
+                ModifieredDeclairName = _ModifieredDeclairName;
+                IsOutput = _IsOutput;
+                IsInput = _IsInput;
+            }
+        }
 
         public void Initialize(GeneratorInitializationContext context)
         {
@@ -1121,10 +1130,15 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
 
         public void Execute(GeneratorExecutionContext context)
         {
+            if (!ContextUtils.IsReferencedAssembly(context, "Katuusagi.MemoizationForUnity"))
+            {
+                return;
+            }
+
             ContextUtils.InitLog<MemoizationGenerator>(context);
             try
             {
-                var rootInfo = CreateMemoizationRootInfo(context);
+                var rootInfo = Analyze(context);
                 foreach (var typeInfo in rootInfo.TypeInfos)
                 {
                     var root = new RootGenerator();
@@ -1392,7 +1406,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
             }
             catch (Exception e)
             {
-                ContextUtils.Log(e);
+                ContextUtils.LogException(e);
             }
         }
 
@@ -1464,7 +1478,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                             {
                                 if (method.IsThreadStatic)
                                 {
-                                    fg.Attribute.Generate("System.ThreadStatic");
+                                    fg.Attribute.Generate("global::System.ThreadStatic");
                                 }
                             });
                             ttg.Method.Generate(ModifierType.Static, string.Empty, method.StaticFieldWrappedType, cg =>
@@ -1511,7 +1525,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                         {
                             if (method.IsThreadStatic)
                             {
-                                fg.Attribute.Generate("System.ThreadStatic");
+                                fg.Attribute.Generate("global::System.ThreadStatic");
                             }
                             fg.Default.Generate(method.FieldInitializer);
                         });
@@ -1835,7 +1849,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
             });
         }
 
-        private RootInfo CreateMemoizationRootInfo(GeneratorExecutionContext context)
+        private RootInfo Analyze(GeneratorExecutionContext context)
         {
             var result = new RootInfo()
             {
@@ -1927,15 +1941,15 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                             continue;
                         }
 
-                        GetAttributeArgument(memoize, "Modifier", null, out string modifierLabel);
-                        GetAttributeArgument(memoize, "MethodName", null, out string memoizationMethodName);
-                        GetAttributeArgument(memoize, "IsClearable", false, out bool isClearable);
-                        GetAttributeArgument(memoize, "IsThreadSafe", false, out bool isThreadSafe);
-                        GetAttributeArgument(memoize, "ThreadSafeType", ThreadSafeType.None, out ThreadSafeType threadSafeType);
-                        GetAttributeArgument(memoize, "CompareArrayElement", false, out bool compareArrayElement);
-                        GetAttributeArgument(memoize, "CacheComparer", null, out string cacheComparer);
-                        GetAttributeArgument(memoize, "InterruptCacheMethod", null, out string interruptCacheMethod);
-                        GetAttributeArgument(memoize, "OnCachedMethod", null, out string onCachedMethod);
+                        memoize.TryGetArgumentValue("Modifier", -1, null, out string modifierLabel);
+                        memoize.TryGetArgumentValue("MethodName", -1, null, out string memoizationMethodName);
+                        memoize.TryGetArgumentValue("IsClearable", -1, false, out bool isClearable);
+                        memoize.TryGetArgumentValue("IsThreadSafe", -1, false, out bool isThreadSafe);
+                        memoize.TryGetArgumentValue("ThreadSafeType", -1, ThreadSafeType.None, out ThreadSafeType threadSafeType);
+                        memoize.TryGetArgumentValue("CompareArrayElement", -1, false, out bool compareArrayElement);
+                        memoize.TryGetArgumentValue("CacheComparer", -1, null, out string cacheComparer);
+                        memoize.TryGetArgumentValue("InterruptCacheMethod", -1, null, out string interruptCacheMethod);
+                        memoize.TryGetArgumentValue("OnCachedMethod", -1, null, out string onCachedMethod);
                         if (threadSafeType == ThreadSafeType.None && isThreadSafe)
                         {
                             threadSafeType = ThreadSafeType.Concurrent;
@@ -2056,10 +2070,12 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                                     HasGenericType = HasGenericTypes(parameter.Type, methodInfo.GenericParameters.Select(v => v.Type)),
                                 };
 
+                                parameterInfo.Init();
                                 methodInfo.Parameters.Add(parameterInfo);
                             }
                         }
 
+                        methodInfo.PreInit();
                         if (!methodInfo.OutputParameters.Any() && !methodInfo.HasReturnType)
                         {
                             ContextUtils.LogError("MEMOIZATION003", "Memoization failed.", "Memoization must always return. Or it must have an out or ref parameter.", method);
@@ -2107,6 +2123,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                             }
                         }
 
+                        methodInfo.Init();
                         typeInfo.Methods.Add(methodInfo);
                     }
                 }
@@ -2114,6 +2131,7 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
                 if (typeInfo.Methods.Any())
                 {
                     typeInfo.Methods = typeInfo.Methods.OrderBy(v => v.Name).ToList();
+                    typeInfo.Init();
                     result.TypeInfos.Add(typeInfo);
                 }
             }
@@ -2135,56 +2153,6 @@ namespace Katuusagi.MemoizationForUnity.SourceGenerator
             }
 
             return genericParameters.Contains(type.ToString());
-        }
-
-        private static void GetAttributeArgument(AttributeSyntax attr, string name, string defaultValue, out string result)
-        {
-            var str = attr.GetArgument(name)?.Expression?.ToString();
-            if (str == null)
-            {
-                result = defaultValue;
-                return;
-            }
-
-            if (str == "null")
-            {
-                result = null;
-                return;
-            }
-
-            str = str?.Replace("\"", string.Empty);
-            if (NameOfMatch.IsMatch(str))
-            {
-                str = str.Substring(7, str.Length - 8).Split('.').Last();
-            }
-
-            result = str;
-        }
-
-        private static void GetAttributeArgument(AttributeSyntax attr, string name, bool defaultValue, out bool result)
-        {
-            var str = attr.GetArgument(name)?.Expression?.ToString();
-            if (str == null)
-            {
-                result = defaultValue;
-                return;
-            }
-
-            result = str == "true";
-        }
-
-        private static void GetAttributeArgument<TEnum>(AttributeSyntax attr, string name, TEnum defaultValue, out TEnum result)
-            where TEnum : struct
-        {
-            var str = attr.GetArgument(name)?.Expression?.ToString();
-            if (str == null)
-            {
-                result = defaultValue;
-                return;
-            }
-
-            var enumText = str.Split('.').Last();
-            Enum.TryParse(enumText, out result);
         }
     }
 }
